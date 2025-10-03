@@ -391,6 +391,17 @@ export class ChatService extends Disposable implements IChatService {
 			return model;
 		}
 
+		// Check if this is an external session ID that's mapped to an internal model
+		for (const [internalId, externalData] of this._modelToExternalSession.entries()) {
+			if (externalData.chatSessionId === sessionId) {
+				const internalModel = this._sessionModels.get(internalId);
+				if (internalModel) {
+					return internalModel;
+				}
+			}
+		}
+
+
 		let sessionData: ISerializableChatData | undefined;
 		if (this.transferredSessionData?.sessionId === sessionId) {
 			sessionData = revive(this._persistedSessions[sessionId]);
@@ -480,9 +491,14 @@ export class ChatService extends Disposable implements IChatService {
 		const disposables = new DisposableStore();
 		this._contentProviderSessionModels.get(chatSessionType)!.set(parsed.sessionId, { model, disposables });
 
+		// Also register this model in the main session models map using the external session ID
+		// This allows it to be found by getOrRestoreSession using the external ID
+		this._sessionModels.set(parsed.sessionId, model);
+
 		disposables.add(model.onDidDispose(() => {
 			this._contentProviderSessionModels?.get(chatSessionType)?.delete(parsed.sessionId);
 			this._modelToExternalSession.delete(model.sessionId);
+			this._sessionModels.delete(parsed.sessionId); // Also remove from main session models
 			content.dispose();
 		}));
 
@@ -574,6 +590,19 @@ export class ChatService extends Disposable implements IChatService {
 				model.completeResponse(lastRequest);
 			}
 		}
+
+		// Listen for changes to the model and save using the external session ID
+		const saveSession = () => {
+			// Save the session data to storage using the external session ID
+			this._chatSessionStore.saveSessionWithId(parsed.sessionId, model).catch(error => {
+			});
+		};
+
+		// Save immediately after setup
+		saveSession();
+
+		// Save whenever the model changes
+		disposables.add(model.onDidChange(saveSession));
 
 		return model;
 	}

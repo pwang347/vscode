@@ -21,6 +21,7 @@ import { EditorInput, IEditorCloseHandler } from '../../../common/editor/editorI
 import { IChatEditingSession, ModifiedFileEntryState } from '../common/chatEditingService.js';
 import { IChatModel } from '../common/chatModel.js';
 import { IChatService } from '../common/chatService.js';
+import { ChatSessionUri } from '../common/chatUri.js';
 import { ChatAgentLocation, ChatEditorInputTitleMaxLength } from '../common/constants.js';
 import { IClearEditingSessionConfirmationOptions } from './actions/chatActions.js';
 import type { IChatEditorOptions } from './chatEditor.js';
@@ -192,11 +193,18 @@ export class ChatEditorInput extends EditorInput implements IEditorCloseHandler 
 		const searchParams = new URLSearchParams(this.resource.query);
 		const chatSessionType = searchParams.get('chatSessionType');
 		const inputType = chatSessionType ?? this.resource.authority;
-		if (this.resource.scheme === Schemas.vscodeChatSession) {
+
+		if (typeof this.sessionId === 'string') {
+			this.model = await this.chatService.getOrRestoreSession(this.sessionId);
+			if (!this.model) {
+				if (this.resource.scheme === Schemas.vscodeChatSession) {
+					this.model = await this.chatService.loadSessionForResource(this.resource, ChatAgentLocation.Chat, CancellationToken.None);
+				} else {
+					this.model = this.chatService.startSession(ChatAgentLocation.Chat, CancellationToken.None, undefined, inputType);
+				}
+			}
+		} else if (this.resource.scheme === Schemas.vscodeChatSession) {
 			this.model = await this.chatService.loadSessionForResource(this.resource, ChatAgentLocation.Chat, CancellationToken.None);
-		} else if (typeof this.sessionId === 'string') {
-			this.model = await this.chatService.getOrRestoreSession(this.sessionId)
-				?? this.chatService.startSession(ChatAgentLocation.Chat, CancellationToken.None, undefined, inputType);
 		} else if (!this.options.target) {
 			this.model = this.chatService.startSession(ChatAgentLocation.Chat, CancellationToken.None, undefined, inputType);
 		} else if ('data' in this.options.target) {
@@ -208,6 +216,19 @@ export class ChatEditorInput extends EditorInput implements IEditorCloseHandler 
 		}
 
 		this.sessionId = this.model.sessionId;
+
+		// Check if the resolved model has a custom title and update our state accordingly
+		if (this.model.hasCustomTitle && !this.hasCustomTitle) {
+			this.hasCustomTitle = true;
+			// Clean up the numeric count since we have a custom title
+			ChatEditorInput.countsInUse.get(this.inputCountId)?.delete(this.inputCount);
+			if (ChatEditorInput.countsInUse.get(this.inputCountId)?.size === 0) {
+				ChatEditorInput.countsInUse.delete(this.inputCountId);
+			}
+			// Fire label change event to update the UI with the custom title
+			this._onDidChangeLabel.fire();
+		}
+
 		this._register(this.model.onDidChange((e) => {
 			// When a custom title is set, we no longer need the numeric count
 			if (e && e.kind === 'setCustomTitle' && !this.hasCustomTitle) {
@@ -305,11 +326,22 @@ export class ChatEditorInputSerializer implements IEditorSerializer {
 			return undefined;
 		}
 
+		// For contributed chat sessions (vscode-chat-session scheme), use the external session ID from the URI
+		// rather than the internal model sessionId, since that's what we need for persistence
+		let sessionIdToSerialize = input.sessionId;
+		if (input.resource.scheme === Schemas.vscodeChatSession) {
+			const parsed = ChatSessionUri.parse(input.resource);
+			if (parsed) {
+				sessionIdToSerialize = parsed.sessionId;
+			}
+		}
+
 		const obj: ISerializedChatEditorInput = {
 			options: input.options,
-			sessionId: input.sessionId,
+			sessionId: sessionIdToSerialize,
 			resource: input.resource
 		};
+
 		return JSON.stringify(obj);
 	}
 
@@ -317,7 +349,18 @@ export class ChatEditorInputSerializer implements IEditorSerializer {
 		try {
 			const parsed: ISerializedChatEditorInput = JSON.parse(serializedEditor);
 			const resource = URI.revive(parsed.resource);
-			return instantiationService.createInstance(ChatEditorInput, resource, { ...parsed.options, target: { sessionId: parsed.sessionId } });
+
+			// For contributed chat sessions (vscode-chat-session scheme), use the sessionId from serialization
+			// which should be the external session ID that can be used to restore the session
+			if (resource.scheme === Schemas.vscodeChatSession && parsed.sessionId) {
+				return instantiationService.createInstance(ChatEditorInput, resource, { ...parsed.options, target: { sessionId: parsed.sessionId } });
+			} else if (resource.scheme === Schemas.vscodeChatSession) {
+				return instantiationService.createInstance(ChatEditorInput, resource, parsed.options);
+			} else {
+				// For regular chat sessions, use the sessionId if available
+				const target = parsed.sessionId ? { sessionId: parsed.sessionId } : undefined;
+				return instantiationService.createInstance(ChatEditorInput, resource, { ...parsed.options, target });
+			}
 		} catch (err) {
 			return undefined;
 		}

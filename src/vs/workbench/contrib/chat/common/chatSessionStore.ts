@@ -381,6 +381,25 @@ export class ChatSessionStore extends Disposable {
 	public getChatStorageFolder(): URI {
 		return this.storageRoot;
 	}
+
+	/**
+	 * Save a session with a custom session ID (for contributed sessions)
+	 */
+	public async saveSessionWithId(sessionId: string, session: ChatModel): Promise<void> {
+		return await this.storeQueue.queue(async () => {
+			try {
+				const index = this.internalGetIndex();
+				const storageLocation = this.getStorageLocation(sessionId);
+				const content = JSON.stringify(session, undefined, 2);
+				await this.fileService.writeFile(storageLocation, VSBuffer.fromString(content));
+
+				// Write succeeded, update index
+				index.entries[sessionId] = getSessionMetadata(session);
+			} catch (e) {
+				this.reportError('sessionWrite', 'Error writing chat session', e);
+			}
+		});
+	}
 }
 
 interface IChatSessionEntryMetadata {
