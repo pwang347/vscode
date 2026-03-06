@@ -2030,6 +2030,88 @@ export default tseslint.config(
 						} // node module allowed even in /browser/
 					]
 				},
+				{
+					'target': 'src/vs/mobile/~',
+					'restrictions': [
+						'vs/base/~',
+						'vs/base/parts/*/~',
+						'vs/platform/*/~',
+						'vs/editor/~',
+						'vs/editor/contrib/*/~',
+						'vs/workbench/~',
+						'vs/workbench/browser/**',
+						'vs/workbench/contrib/**',
+						'vs/workbench/services/*/~',
+						'vs/mobile/~',
+						'vs/mobile/services/**',
+						'vs/mobile/mobile.web.main.js'
+					]
+				},
+				{
+					'target': 'src/vs/mobile/contrib/*/~',
+					'restrictions': [
+						'vs/base/~',
+						'vs/base/parts/*/~',
+						'vs/platform/*/~',
+						'vs/editor/~',
+						'vs/editor/contrib/*/~',
+						'vs/workbench/~',
+						'vs/workbench/browser/**',
+						'vs/workbench/services/*/~',
+						'vs/workbench/contrib/*/~',
+						'vs/mobile/~',
+						'vs/mobile/contrib/*/~',
+						'vs/mobile/services/**'
+					]
+				},
+				{
+					'target': 'src/vs/mobile/services/**',
+					'restrictions': [
+						'vs/base/{common,browser}/**',
+						'vs/base/parts/*/{common,browser}/**',
+						'vs/platform/*/{common,browser}/**',
+						'vs/editor/{common,browser}/**',
+						'vs/editor/contrib/*/{common,browser}/**',
+						'vs/workbench/{common,browser}/**',
+						'vs/workbench/services/*/{common,browser}/**',
+						'vs/mobile/services/**'
+					]
+				},
+				{
+					'target': 'src/vs/mobile/mobile.common.main.ts',
+					'layer': 'browser',
+					'restrictions': [
+						'vs/base/~',
+						'vs/base/parts/*/~',
+						'vs/platform/*/~',
+						'vs/editor/~',
+						'vs/editor/editor.all.js',
+						'vs/editor/contrib/*/~',
+						'vs/workbench/~',
+						'vs/workbench/api/~',
+						'vs/workbench/services/*/~',
+						'vs/workbench/contrib/*/~',
+						'vs/workbench/contrib/terminal/terminal.all.js'
+					]
+				},
+				{
+					'target': 'src/vs/mobile/mobile.web.main.ts',
+					'layer': 'browser',
+					'restrictions': [
+						'vs/base/~',
+						'vs/base/parts/*/~',
+						'vs/platform/*/~',
+						'vs/editor/~',
+						'vs/editor/contrib/*/~',
+						'vs/workbench/~',
+						'vs/workbench/api/~',
+						'vs/workbench/services/*/~',
+						'vs/workbench/contrib/*/~',
+						'vs/workbench/workbench.web.main.js',
+						'vs/mobile/~',
+						'vs/mobile/mobile.common.main.js'
+					]
+				},
 			]
 		}
 	},

@@ -8,6 +8,11 @@ node_modules/
 extensions/**/dist/
 src/vs/base/browser/ui/codicons/codicon/codicon.ttf
 /out*/
+/Users/
+/out-vscode-mobile-min/
+mobile/android/.idea/
+mobile/android/.gradle/
+mobile/android/app/build/
 /extensions/**/out/
 build/node_modules
 build/darwin/.dmgbuild

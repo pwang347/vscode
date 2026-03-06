@@ -1,0 +1,352 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* ---- Mobile Workbench Base ---- */
+
+.mobile-workbench {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+	/* Safe area insets for devices with notch/home indicator */
+	padding-top: env(safe-area-inset-top);
+	padding-bottom: env(safe-area-inset-bottom);
+	padding-left: env(safe-area-inset-left);
+	padding-right: env(safe-area-inset-right);
+}
+
+/* ---- Connection Bar (top) ---- */
+
+.mobile-workbench .mobile-connection-bar {
+	display: flex;
+	align-items: center;
+	height: 44px;
+	min-height: 44px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--vscode-mobileConnectionBar-border, transparent);
+	background: var(--vscode-mobileConnectionBar-background, var(--vscode-sideBar-background));
+	color: var(--vscode-mobileConnectionBar-foreground, var(--vscode-sideBar-foreground));
+	flex-shrink: 0;
+	gap: 8px;
+	z-index: 1;
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-app-region: drag;
+}
+
+.mobile-workbench .mobile-connection-bar .back-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
+	cursor: pointer;
+	-webkit-app-region: no-drag;
+}
+
+.mobile-workbench .mobile-connection-bar .back-button:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+}
+
+.mobile-workbench .mobile-connection-bar .connection-status {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	overflow: hidden;
+}
+
+.mobile-workbench .mobile-connection-bar .status-indicator {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.mobile-workbench .mobile-connection-bar .status-indicator.connected {
+	background: var(--vscode-mobileConnectionStatus-connected, #89D185);
+}
+
+.mobile-workbench .mobile-connection-bar .status-indicator.reconnecting {
+	background: var(--vscode-mobileConnectionStatus-reconnecting, #CCA700);
+	animation: pulse 1.5s ease-in-out infinite;
+}
+
+.mobile-workbench .mobile-connection-bar .status-indicator.disconnected {
+	background: var(--vscode-mobileConnectionStatus-disconnected, #F48771);
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.4; }
+}
+
+.mobile-workbench .mobile-connection-bar .server-name {
+	font-size: 13px;
+	font-weight: 500;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mobile-workbench .mobile-connection-bar .connection-actions {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	-webkit-app-region: no-drag;
+}
+
+/* ---- Active View Container ---- */
+
+.mobile-workbench .mobile-active-view {
+	flex: 1;
+	overflow: hidden;
+	position: relative;
+}
+
+.mobile-workbench .mobile-view-stack {
+	position: absolute;
+	inset: 0;
+}
+
+.mobile-workbench .mobile-view {
+	position: absolute;
+	inset: 0;
+	background: var(--vscode-editor-background);
+	overflow: hidden;
+}
+
+.mobile-workbench .mobile-view.hidden {
+	display: none;
+}
+
+/* ---- Navigation Bar (bottom) ---- */
+
+.mobile-workbench .mobile-navigation-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-around;
+	height: 56px;
+	min-height: 56px;
+	border-top: 1px solid var(--vscode-mobileNavigationBar-border, transparent);
+	background: var(--vscode-mobileNavigationBar-background, var(--vscode-sideBar-background));
+	color: var(--vscode-mobileNavigationBar-foreground, var(--vscode-sideBar-foreground));
+	flex-shrink: 0;
+	-webkit-user-select: none;
+	user-select: none;
+	z-index: 1;
+}
+
+.mobile-workbench .mobile-navigation-bar.keyboard-visible {
+	display: none;
+}
+
+.mobile-workbench .mobile-nav-tab {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	height: 100%;
+	gap: 2px;
+	cursor: pointer;
+	opacity: 0.6;
+	transition: opacity 0.15s ease;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mobile-workbench .mobile-nav-tab.active {
+	opacity: 1;
+}
+
+.mobile-workbench .mobile-nav-tab .tab-icon {
+	font-size: 20px;
+	line-height: 24px;
+}
+
+.mobile-workbench .mobile-nav-tab .tab-label {
+	font-size: 10px;
+	font-weight: 500;
+	line-height: 12px;
+}
+
+.mobile-workbench .mobile-nav-tab .tab-badge {
+	position: absolute;
+	top: 4px;
+	right: calc(50% - 16px);
+	min-width: 16px;
+	height: 16px;
+	border-radius: 8px;
+	background: var(--vscode-badge-background);
+	color: var(--vscode-badge-foreground);
+	font-size: 10px;
+	font-weight: 600;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 4px;
+}
+
+/* ---- Chat View (full-screen) ---- */
+
+.mobile-workbench .mobile-chat-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.mobile-workbench .mobile-chat-view .interactive-session {
+	max-width: none;
+}
+
+.mobile-workbench .mobile-chat-view .interactive-item-container {
+	max-width: none;
+	padding: 0 12px;
+}
+
+.mobile-workbench .mobile-chat-view .interactive-input-part {
+	max-width: none;
+	margin: 0 !important;
+	padding: 8px 12px !important;
+}
+
+.mobile-workbench .mobile-chat-view .chat-input-container {
+	border-radius: 16px !important;
+}
+
+/* ---- File Viewer ---- */
+
+.mobile-workbench .mobile-file-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.mobile-workbench .mobile-file-tree {
+	flex: 1;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.mobile-workbench .mobile-file-editor {
+	flex: 1;
+	overflow: hidden;
+}
+
+/* ---- Terminal View ---- */
+
+.mobile-workbench .mobile-terminal-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.mobile-workbench .mobile-terminal-toolbar {
+	display: flex;
+	align-items: center;
+	height: 36px;
+	min-height: 36px;
+	padding: 0 8px;
+	gap: 4px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+	overflow-x: auto;
+	flex-shrink: 0;
+}
+
+.mobile-workbench .mobile-terminal-toolbar .special-key {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 28px;
+	min-width: 40px;
+	padding: 0 8px;
+	border-radius: 6px;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.mobile-workbench .mobile-terminal-toolbar .special-key:active {
+	background: var(--vscode-button-secondaryHoverBackground);
+}
+
+/* ---- Touch Gestures ---- */
+
+.mobile-workbench .swipe-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	pointer-events: none;
+}
+
+.mobile-workbench .pull-to-refresh-indicator {
+	position: absolute;
+	top: 0;
+	left: 50%;
+	transform: translateX(-50%);
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.2s;
+	z-index: 5;
+}
+
+.mobile-workbench .pull-to-refresh-indicator.active {
+	opacity: 1;
+}
+
+/* ---- Landscape Mode ---- */
+
+@media (orientation: landscape) {
+	.mobile-workbench .mobile-connection-bar {
+		height: 36px;
+		min-height: 36px;
+	}
+
+	.mobile-workbench .mobile-navigation-bar {
+		height: 48px;
+		min-height: 48px;
+	}
+}
+
+/* ---- Animations ---- */
+
+.mobile-workbench .mobile-view-enter {
+	animation: viewSlideIn 0.25s ease-out;
+}
+
+.mobile-workbench .mobile-view-exit {
+	animation: viewSlideOut 0.25s ease-in;
+}
+
+@keyframes viewSlideIn {
+	from {
+		transform: translateX(100%);
+		opacity: 0.8;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+
+@keyframes viewSlideOut {
+	from {
+		transform: translateX(0);
+		opacity: 1;
+	}
+	to {
+		transform: translateX(100%);
+		opacity: 0.8;
+	}
+}

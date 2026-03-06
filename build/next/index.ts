@@ -170,6 +170,7 @@ function getEntryPointsForTarget(target: BuildTarget): string[] {
 			return [
 				...workerEntryPoints,
 				'vs/workbench/workbench.web.main.internal', // web workbench only (no browser shell)
+				'vs/mobile/browser/mobile', // mobile Capacitor shell
 				...keyboardMapEntryPoints,
 			];
 		default:
@@ -216,6 +217,7 @@ function getCssBundleEntryPointsForTarget(target: BuildTarget): Set<string> {
 		case 'web':
 			return new Set([
 				'vs/workbench/workbench.web.main.internal',
+				'vs/mobile/browser/mobile',
 			]);
 		default:
 			throw new Error(`Unknown target: ${target}`);
