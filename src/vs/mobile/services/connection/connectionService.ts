@@ -96,12 +96,6 @@ export class ConnectionService extends Disposable implements IConnectionService 
 		this.setStatus('reconnecting');
 
 		try {
-			// The actual WebSocket connection to the VS Code server is handled
-			// by the standard remote agent service via IWorkbenchConstructionOptions.
-			// This service manages the UI state and server list.
-			//
-			// In the Capacitor app, the connection goes through the device's
-			// Tailscale VPN tunnel — no special SDK needed.
 			this._currentServer = server;
 			this._onDidChangeServer.fire(server);
 
@@ -111,7 +105,25 @@ export class ConnectionService extends Disposable implements IConnectionService 
 			// Save to server list
 			this.saveServer(server);
 
-			this.setStatus('connected');
+			// Check if we already have the correct remoteAuthority in the URL.
+			// If so, just update the status — no reload needed.
+			const currentParams = new URLSearchParams(window.location.search);
+			const desiredAuthority = `${server.address}:${server.port}`;
+			if (currentParams.get('remoteAuthority') === desiredAuthority) {
+				this.setStatus('connected');
+				return;
+			}
+
+			// Reload the app with remoteAuthority in the URL.
+			// The mobile.ts bootstrap reads these and passes remoteAuthority
+			// + connectionToken to the workbench options, which establishes
+			// a WebSocket connection to the server's extension host.
+			const params = new URLSearchParams();
+			params.set('remoteAuthority', desiredAuthority);
+			if (server.connectionToken) {
+				params.set('connectionToken', server.connectionToken);
+			}
+			window.location.search = params.toString();
 		} catch {
 			this.setStatus('disconnected');
 			throw new Error(`Failed to connect to ${server.address}:${server.port}`);

@@ -105,8 +105,8 @@ export class BrowserMain extends Disposable {
 	private readonly indexedDBFileSystemProviders: IndexedDBFileSystemProvider[] = [];
 
 	constructor(
-		private readonly domElement: HTMLElement,
-		private readonly configuration: IWorkbenchConstructionOptions
+		protected readonly domElement: HTMLElement,
+		protected readonly configuration: IWorkbenchConstructionOptions
 	) {
 		super();
 
@@ -254,7 +254,7 @@ export class BrowserMain extends Disposable {
 		this._register(workbench.onDidShutdown(() => this.dispose()));
 	}
 
-	private async initServices(): Promise<{ serviceCollection: ServiceCollection; configurationService: IWorkbenchConfigurationService; logService: ILogService }> {
+	protected async initServices(): Promise<{ serviceCollection: ServiceCollection; configurationService: IWorkbenchConfigurationService; logService: ILogService }> {
 		const serviceCollection = new ServiceCollection();
 
 
@@ -603,7 +603,7 @@ export class BrowserMain extends Disposable {
 		return userDataProfilesService.getProfileForWorkspace(workspace) ?? userDataProfilesService.defaultProfile;
 	}
 
-	private resolveWorkspace(): IAnyWorkspaceIdentifier {
+	protected resolveWorkspace(): IAnyWorkspaceIdentifier {
 		let workspace: IWorkspace | undefined = undefined;
 		if (this.configuration.workspaceProvider) {
 			workspace = this.configuration.workspaceProvider.workspace;

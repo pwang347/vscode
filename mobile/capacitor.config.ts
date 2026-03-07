@@ -6,7 +6,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
 	appId: 'com.microsoft.vscode.mobile',
-	appName: 'VS Code Mobile',
+	appName: 'VS Code',
 	webDir: '../out-vscode-mobile',
 	server: {
 		// In development, point to the VS Code server with live reload
@@ -22,8 +22,7 @@ const config: CapacitorConfig = {
 			spinnerColor: '#007acc',
 		},
 		Keyboard: {
-			resize: 'ionic',
-			resizeOnFullScreen: true,
+			resize: 'body',
 		},
 		StatusBar: {
 			style: 'DARK', // Light text for dark background
@@ -44,6 +43,7 @@ const config: CapacitorConfig = {
 		allowMixedContent: true, // Tailscale may use HTTP internally
 		captureInput: true,
 		webContentsDebuggingEnabled: true, // Disable in production
+		scheme: 'http', // Use HTTP to avoid mixed content issues with ws:// remote connections
 	},
 };
 

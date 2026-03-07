@@ -29,14 +29,13 @@ class MobileConfigurationContribution extends Disposable implements IWorkbenchCo
 			'editor.minimap.enabled': false,        // Save screen space
 			'editor.wordWrap': 'on',                // Wrap on narrow screens
 			'editor.lineNumbers': 'on',
-			'editor.fontSize': 14,
+			'editor.fontSize': 16,
 			'editor.glyphMargin': false,             // More horizontal space
 			'editor.folding': true,
 			'editor.scrollBeyondLastLine': false,
 			'workbench.editor.showTabs': 'none',     // No tabs in mobile (stack navigation)
 			'workbench.editor.useModal': 'all',       // All editors open as modal
-			'terminal.integrated.fontSize': 14,
-			'chat.editor.fontSize': 14,
+			'terminal.integrated.fontSize': 15,
 		};
 
 		for (const [key, value] of Object.entries(overrides)) {
@@ -49,4 +48,4 @@ class MobileConfigurationContribution extends Disposable implements IWorkbenchCo
 	}
 }
 
-registerWorkbenchContribution2(MobileConfigurationContribution.ID, MobileConfigurationContribution, WorkbenchPhase.BlockStartup);
+registerWorkbenchContribution2(MobileConfigurationContribution.ID, MobileConfigurationContribution, WorkbenchPhase.AfterRestored);

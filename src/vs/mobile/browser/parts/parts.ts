@@ -9,6 +9,8 @@
 export const enum MobileParts {
 	CONNECTION_BAR = 'workbench.parts.mobile.connectionBar',
 	NAVIGATION_BAR = 'workbench.parts.mobile.navigationBar',
+	TOP_BAR = 'workbench.parts.mobile.topBar',
+	DRAWER = 'workbench.parts.mobile.drawer',
 }
 
 /**
@@ -17,5 +19,13 @@ export const enum MobileParts {
 export const enum MobileTab {
 	Chat = 'chat',
 	Files = 'files',
-	Terminal = 'terminal',
+}
+
+/**
+ * Phases of the mobile app flow.
+ */
+export const enum MobilePhase {
+	Welcome = 'welcome',
+	WorkspacePicker = 'workspacePicker',
+	Chat = 'chat',
 }

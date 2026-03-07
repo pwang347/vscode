@@ -26,6 +26,13 @@ import '../workbench/browser/actions/widgetNavigationCommands.js';
 //#endregion
 
 
+//#region --- mobile external opener
+
+import './contrib/externalOpener/browser/mobileExternalOpener.contribution.js';
+
+//#endregion
+
+
 //#region --- API Extension Points
 
 import '../workbench/services/actions/common/menusExtensionPoint.js';
@@ -157,6 +164,7 @@ import { McpGalleryService } from '../platform/mcp/common/mcpGalleryService.js';
 import { AllowedMcpServersService } from '../platform/mcp/common/allowedMcpServersService.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
+import { IConnectionService, ConnectionService } from './services/connection/connectionService.js';
 
 registerSingleton(IUserDataSyncLogService, UserDataSyncLogService, InstantiationType.Delayed);
 registerSingleton(IAllowedExtensionsService, AllowedExtensionsService, InstantiationType.Delayed);
@@ -174,6 +182,7 @@ registerSingleton(IOpenerService, OpenerService, InstantiationType.Delayed);
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 registerSingleton(IMcpGalleryService, McpGalleryService, InstantiationType.Delayed);
 registerSingleton(IAllowedMcpServersService, AllowedMcpServersService, InstantiationType.Delayed);
+registerSingleton(IConnectionService, ConnectionService, InstantiationType.Delayed);
 
 //#endregion
 
@@ -269,5 +278,11 @@ import '../workbench/contrib/languageDetection/browser/languageDetection.contrib
 
 // Metered Connection
 import '../workbench/contrib/meteredConnection/browser/meteredConnection.contribution.js';
+
+// Mobile Connection (server management UI)
+import './contrib/connection/browser/connection.contribution.js';
+
+// Mobile Layout (bottom nav bar, simplified chrome)
+import './contrib/mobileLayout/browser/mobileLayout.contribution.js';
 
 //#endregion

@@ -6,100 +6,144 @@ This document is the **authoritative specification** for the mobile workbench la
 
 ## 1. Overview
 
-The Mobile Workbench (`MobileWorkbench` in `mobile/browser/workbench.ts`) provides a touch-optimized, single-column layout for mobile devices. Unlike the desktop workbench and sessions window:
+The Mobile Workbench (`MobileWorkbench` in `mobile/browser/workbench.ts`) provides a touch-optimized, chat-first layout for mobile devices. The app follows a three-phase flow:
 
-- Uses **stack-based navigation** (push/pop), not a grid layout
-- Has a **bottom navigation bar** (native mobile pattern)
-- All views are **full-screen** — no side-by-side panels
+1. **Welcome page** — connect to a VS Code server (with saved server configs)
+2. **Workspace picker** — select a workspace on the connected server (with saved workspaces)
+3. **Chat view** — full-screen chat with a left drawer for navigation
+
+Key principles:
+- **Chat-first** — the primary surface is a full-screen chat window
+- **Drawer navigation** — a hamburger button (top-left) opens a side drawer for Files, Terminals, chat sessions, etc.
+- **No bottom nav** — all navigation lives in the drawer
 - Optimized for **safe areas** (notch, home indicator, camera cutout)
 - Supports both **portrait and landscape** orientations
 
 ---
 
-## 2. Layout Structure
+## 2. App Flow
 
-### 2.1 Visual Representation
+### 2.1 Welcome Page (not connected)
+
+Shown when no `remoteAuthority` is present. Full-screen page with:
 
 ```
 ┌──────────────────────────────┐
-│      Connection Bar          │  ← Top: connection status, back button
-├──────────────────────────────┤
 │                              │
+│           VS Code            │
 │                              │
-│     Active View              │  ← Full screen: Chat / Files / Terminal
-│     (stack-based navigation) │
+│   ┌────────────────────────┐ │
+│   │  my-dev-machine        │ │  ← Saved servers (tap to connect)
+│   └────────────────────────┘ │
+│   ┌────────────────────────┐ │
+│   │  office-workstation    │ │
+│   └────────────────────────┘ │
 │                              │
+│   [ + Connect to Server ]    │  ← Opens connection form
 │                              │
-├──────────────────────────────┤
-│  💬 Chat  |  📁 Files  |  ⚡  │  ← Bottom navigation bar
 └──────────────────────────────┘
 ```
 
-### 2.2 Parts
+### 2.2 Workspace Picker (connected, no workspace)
 
-| Part | Position | Default Visibility | Notes |
-|------|----------|-------------------|-------|
-| Connection Bar | Top, fixed | Always visible | Minimal: connection status, back button |
-| Active View | Center, fills available space | Always visible | Stack-navigated full-screen views |
-| Navigation Bar | Bottom, fixed | Always visible | 3 tabs: Chat, Files, Terminal |
+Shown when connected but no `folder` or `workspace` query param. Lists folders the server exposes:
 
-#### Excluded Parts (from desktop/sessions workbench)
+```
+┌──────────────────────────────┐
+│  ← Back     my-dev-machine   │
+├──────────────────────────────┤
+│                              │
+│   Select a Workspace         │
+│                              │
+│   ┌────────────────────────┐ │
+│   │  ~/projects/vscode     │ │  ← Saved workspaces (tap to open)
+│   └────────────────────────┘ │
+│   ┌────────────────────────┐ │
+│   │  ~/projects/myapp      │ │
+│   └────────────────────────┘ │
+│                              │
+│   [ Open Folder... ]         │  ← Type a path manually
+│                              │
+└──────────────────────────────┘
+```
 
-| Part | Reason |
-|------|--------|
-| Titlebar | Replaced by Connection Bar |
-| Sidebar | Views are full-screen, navigated via bottom nav |
-| Auxiliary Bar | Not applicable to mobile |
-| Activity Bar | Replaced by bottom navigation |
-| Status Bar | Reduced chrome |
-| Panel | Terminal is a full-screen view instead |
+### 2.3 Chat View (connected + workspace)
 
-### 2.3 Navigation Tabs
+The main working surface: full-screen chat with a drawer button.
 
-| Tab | Icon | View | Primary Action |
-|-----|------|------|----------------|
-| Chat | `comment-discussion` | Full-screen chat panel | Send messages, review responses |
-| Files | `files` | File tree + file viewer | Browse, view, simple edit |
-| Terminal | `terminal` | Full-screen terminal | Command execution |
-
----
-
-## 3. Connection Bar
-
-The connection bar is a minimal top bar that shows:
-
-- **Back button**: When navigated into a sub-view (e.g., file viewer from file tree)
-- **Connection status**: Green dot (connected), yellow (reconnecting), red (disconnected)
-- **Server name**: Tailscale machine name (e.g., "my-dev-machine")
-- **Landscape**: Shows more detail; portrait minimizes to icons
-
-### 3.1 Safe Area
-
-The connection bar respects `env(safe-area-inset-top)` for devices with notches.
-
----
-
-## 4. Navigation Bar (Bottom)
-
-The bottom navigation bar follows native mobile patterns:
-
-- Fixed to bottom of viewport
-- Respects `env(safe-area-inset-bottom)` for home indicator
-- Haptic feedback (light impact) on tab switch
-- Active tab indicated by filled icon + accent color
-- Badge support (e.g., unread messages count on Chat tab)
+```
+┌──────────────────────────────┐
+│  ☰  New Chat                 │  ← Top bar: drawer toggle + title
+├──────────────────────────────┤
+│                              │
+│                              │
+│     Chat Messages            │  ← Full-screen chat widget
+│                              │
+│                              │
+│                              │
+├──────────────────────────────┤
+│  [ Chat input ...         ]  │  ← Input stays above keyboard
+└──────────────────────────────┘
+```
 
 ---
 
-## 5. View Stack
+## 3. Drawer
 
-Each tab maintains its own navigation stack:
+The drawer slides in from the left when the hamburger button (☰) is tapped. It overlays the chat view with a semi-transparent backdrop.
 
-- **Chat tab**: Chat view → (push) File preview from chat reference
-- **Files tab**: File tree → (push) File viewer → (push) Diff view
-- **Terminal tab**: Terminal view (single level)
+```
+┌─────────────┬────────────────┐
+│             │                │
+│  New Chat   │   (dimmed      │
+│  Files      │    chat view)  │
+│  ─────────  │                │
+│  Session 1  │                │
+│  Session 2  │                │
+│  Session 3  │                │
+│             │                │
+│  ─────────  │                │
+│  🟢 server  │                │
+│  📁 workspace│               │
+└─────────────┴────────────────┘
+```
 
-Back navigation: swipe from left edge or back button in connection bar.
+### 3.1 Drawer Sections
+
+| Section | Content |
+|---------|---------|
+| Actions | **New Chat**, **Files** — each pushes a full-screen view |
+| Separator | Visual divider |
+| Chat Sessions | Scrollable list of past sessions; tap to switch |
+| Separator | Visual divider |
+| Footer | Connection info (server name + status dot) and workspace path |
+
+### 3.2 Drawer Behavior
+
+- Width: 80% of screen, max 320px
+- Dismisses on: tap backdrop, swipe left, or select an action
+- Opening/closing animated (slide + fade backdrop)
+
+---
+
+## 4. Top Bar
+
+Replaces the old Connection Bar. Simpler — just two elements:
+
+| Element | Position | Action |
+|---------|----------|--------|
+| ☰ Hamburger button | Left | Opens drawer |
+| Title | Center-left | Shows "New Chat" or current session name |
+
+Height: 44px (portrait), 36px (landscape). Respects `env(safe-area-inset-top)`.
+
+---
+
+## 5. Keyboard Handling
+
+- When keyboard opens, the main container resizes to `visualViewport.height`
+- Chat input stays visible above the keyboard
+- Drawer cannot be opened while keyboard is visible (prevents layout jank)
 
 ---
 
@@ -107,22 +151,12 @@ Back navigation: swipe from left edge or back button in connection bar.
 
 ### Portrait (default)
 - Single column, full width
-- Connection bar: compact (icons + short server name)
-- Navigation bar: icons + labels
+- Drawer width: 80% of screen
 
 ### Landscape
-- Same single column but wider
-- Chat input area benefits from extra width
-- Connection bar: expanded (full server info)
-- Terminal: more columns visible
-
----
-
-## 7. Keyboard Handling
-
-- Chat input stays above virtual keyboard via `visualViewport` API
-- Navigation bar hides when keyboard is open (more screen space for input)
-- File viewer: keyboard doesn't auto-open in read-only mode
+- Same layout, taller input area
+- Drawer width: min(80%, 320px)
+- Top bar: 36px height
 
 ---
 
@@ -130,4 +164,6 @@ Back navigation: swipe from left edge or back button in connection bar.
 
 | Date | Change |
 |------|--------|
+| 2026-03-06 | Remove Terminals tab; implement Files tab with file explorer view |
+| 2026-03-06 | Redesign: welcome → workspace → chat-with-drawer flow |
 | 2026-03-05 | Initial specification |

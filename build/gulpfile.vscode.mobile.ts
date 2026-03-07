@@ -70,10 +70,13 @@ const copyMobileHtmlTask = task.define('copy-mobile-html', () => {
 	// E.g. "./out/vs/mobile/browser/mobile.js" → "./vs/mobile/browser/mobile.js"
 	html = html.replace(/\.\/out\//g, './');
 
-	// Fix the _VSCODE_FILE_ROOT to not include "/out/"
+	// Fix the _VSCODE_FILE_ROOT for Capacitor. Using './' would cause
+	// FileAccess.asBrowserUri() to generate file:// URIs (via URI.file()),
+	// which Capacitor's WebView blocks. Using the full https://localhost/
+	// origin ensures all resource URIs use the correct scheme.
 	html = html.replace(
 		'globalThis._VSCODE_FILE_ROOT = baseUrl + \'/out/\';',
-		'globalThis._VSCODE_FILE_ROOT = \'./\';'
+		'globalThis._VSCODE_FILE_ROOT = \'https://localhost/\';'
 	);
 
 	// Remove empty script tags (NLS scripts with empty src cause the browser

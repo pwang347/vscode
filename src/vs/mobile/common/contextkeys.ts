@@ -12,6 +12,12 @@ export const IsMobileAppContext = new RawContextKey<boolean>('isMobileApp', fals
 
 //#endregion
 
+//#region < --- App Phase --- >
+
+export const MobilePhaseContext = new RawContextKey<string>('mobilePhase', 'welcome', localize('mobilePhase', "The current mobile app phase: welcome, workspacePicker, or chat"));
+
+//#endregion
+
 //#region < --- Connection --- >
 
 export const MobileConnectionStatusContext = new RawContextKey<string>('mobileConnectionStatus', 'disconnected', localize('mobileConnectionStatus', "The current mobile connection status: connected, reconnecting, or disconnected"));
@@ -22,6 +28,12 @@ export const MobileConnectionStatusContext = new RawContextKey<string>('mobileCo
 
 export const MobileActiveTabContext = new RawContextKey<string>('mobileActiveTab', 'chat', localize('mobileActiveTab', "The currently active tab in the mobile navigation bar"));
 export const MobileCanGoBackContext = new RawContextKey<boolean>('mobileCanGoBack', false, localize('mobileCanGoBack', "Whether the mobile navigation stack can go back"));
+
+//#endregion
+
+//#region < --- Drawer --- >
+
+export const MobileDrawerOpenContext = new RawContextKey<boolean>('mobileDrawerOpen', false, localize('mobileDrawerOpen', "Whether the mobile drawer is currently open"));
 
 //#endregion
 

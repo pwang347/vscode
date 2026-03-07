@@ -304,16 +304,20 @@ export class ChatSetupController extends Disposable {
 			existingAdvancedSetting = {};
 		}
 
-		if (options.useEnterpriseProvider) {
-			await this.configurationService.updateValue(`${defaultChat.completionsAdvancedSetting}`, {
-				...existingAdvancedSetting,
-				'authProvider': defaultChat.provider.enterprise.id
-			}, ConfigurationTarget.USER);
-		} else {
-			await this.configurationService.updateValue(`${defaultChat.completionsAdvancedSetting}`, Object.keys(existingAdvancedSetting).length > 0 ? {
-				...existingAdvancedSetting,
-				'authProvider': undefined
-			} : undefined, ConfigurationTarget.USER);
+		try {
+			if (options.useEnterpriseProvider) {
+				await this.configurationService.updateValue(`${defaultChat.completionsAdvancedSetting}`, {
+					...existingAdvancedSetting,
+					'authProvider': defaultChat.provider.enterprise.id
+				}, ConfigurationTarget.USER);
+			} else {
+				await this.configurationService.updateValue(`${defaultChat.completionsAdvancedSetting}`, Object.keys(existingAdvancedSetting).length > 0 ? {
+					...existingAdvancedSetting,
+					'authProvider': undefined
+				} : undefined, ConfigurationTarget.USER);
+			}
+		} catch (e) {
+			this.logService.warn(`[chat setup] setupWithProvider: failed to write configuration, continuing setup: ${e}`);
 		}
 
 		return this.setup({ ...options, forceSignIn: true });

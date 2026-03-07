@@ -1,0 +1,65 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* ---- Mobile Bottom Navigation Bar ---- */
+
+.mobile-bottom-navbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-around;
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 56px;
+	background: var(--vscode-sideBar-background);
+	border-top: 1px solid var(--vscode-sideBar-border, var(--vscode-panel-border));
+	z-index: 100;
+	padding-bottom: env(safe-area-inset-bottom);
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.mobile-nav-btn {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2px;
+	flex: 1;
+	height: 100%;
+	cursor: pointer;
+	color: var(--vscode-foreground);
+	opacity: 0.5;
+	transition: opacity 0.15s;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-btn.active {
+	opacity: 1;
+	color: var(--vscode-focusBorder, #007acc);
+}
+
+.mobile-nav-btn .codicon {
+	font-size: 22px;
+}
+
+.mobile-nav-label {
+	font-size: 10px;
+	font-weight: 500;
+}
+
+/* ---- Mobile-app body adjustments ---- */
+
+/* Make sidebar take full width on mobile */
+.mobile-app .monaco-workbench .part.sidebar {
+	min-width: 100% !important;
+	max-width: 100% !important;
+}
+
+/* Make panel (terminal) take full width/height */
+.mobile-app .monaco-workbench .part.panel {
+	min-width: 100% !important;
+}
