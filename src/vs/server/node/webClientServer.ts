@@ -494,9 +494,9 @@ export class WebClientServer {
 	/**
 	 * Handle HTTP requests for /chat — serves the mobile workbench.
 	 *
-	 * In dev mode, serves the pre-built Vite bundle (~8 requests).
-	 * Run `cd build/vite && npx vite build --watch --config vite.mobile.config.ts`.
-	 * Falls back to unbundled `mobile-dev.html` if no bundle exists.
+	 * Serves `mobile.html` which loads a single bundled JS + CSS file.
+	 * The bundle is produced by `build/next` in both dev (watch mode)
+	 * and production (bundle command).
 	 */
 	private async _handleChat(req: http.IncomingMessage, res: http.ServerResponse, parsedUrl: url.UrlWithParsedQuery): Promise<void> {
 		const config = await this._resolveWebClientConfiguration(req, parsedUrl);
@@ -507,80 +507,8 @@ export class WebClientServer {
 		// Mobile doesn't use workspace URIs — serialize the config as-is
 		config.values['WORKBENCH_WEB_CONFIGURATION'] = WebClientServer._asJSON(config.workbenchWebConfiguration);
 
-		if (this._environmentService.isBuilt) {
-			const filePath = FileAccess.asFileUri('vs/mobile/browser/mobile.html').fsPath;
-			return this._serveHTML(req, res, filePath, config.values, config.WORKBENCH_NLS_BASE_URL, config.useTestResolver, config.remoteAuthority);
-		}
-
-		return this._serveMobileBundle(req, res, config);
-	}
-
-	/**
-	 * Serve the pre-built Vite mobile bundle, injecting server configuration
-	 * and rewriting asset paths to go through /static/.
-	 */
-	private async _serveMobileBundle(req: http.IncomingMessage, res: http.ServerResponse, config: { staticRoute: string; remoteAuthority: string; useTestResolver: boolean; values: { [key: string]: string }; WORKBENCH_NLS_BASE_URL: string | undefined }): Promise<void> {
-		const bundlePath = join(APP_ROOT, 'out-vscode-mobile-bundle', 'build', 'vite', 'mobile-vite.html');
-		let data: string;
-		try {
-			data = (await promises.readFile(bundlePath)).toString();
-		} catch {
-			// No bundle — fall back to unbundled dev HTML
-			const filePath = FileAccess.asFileUri('vs/mobile/browser/mobile-dev.html').fsPath;
-			return this._serveHTML(req, res, filePath, config.values, config.WORKBENCH_NLS_BASE_URL, config.useTestResolver, config.remoteAuthority);
-		}
-
-		const bundleBase = `${config.staticRoute}/out-vscode-mobile-bundle/`;
-
-		// Rewrite relative asset paths to absolute /static/ paths
-		data = data.replace(/(["'])(?:\.\.\/)*assets\//g, `$1${bundleBase}assets/`);
-
-		// Remove `crossorigin` attributes that Vite adds — they cause CORS
-		// issues when served from the same-origin code server
-		data = data.replace(/ crossorigin/g, '');
-
-		// Rewrite _VSCODE_FILE_ROOT to a full HTTP URL pointing to the code
-		// server's static route. Using a path-only value (e.g. /oss-dev/static/out/)
-		// causes FileAccess to generate file:// URIs which are blocked by CSP.
-		data = data.replace(
-			/globalThis\._VSCODE_FILE_ROOT\s*=\s*['"][^'"]*['"]/,
-			`globalThis._VSCODE_FILE_ROOT = 'http://${config.remoteAuthority}${config.staticRoute}/out/'`
-		);
-
-		// Apply standard template substitution for {{WORKBENCH_WEB_CONFIGURATION}},
-		// {{WORKBENCH_AUTH_SESSION}}, {{WORKBENCH_BUILTIN_EXTENSIONS}}, etc.
-		// This uses the same mechanism as _serveHTML to safely inject the config.
-		data = data.replace(/\{\{([^}]+)\}\}/g, (_, key) => config.values[key] ?? '');
-
-		// Serve with CSP headers
-		const cspDirectives = [
-			'default-src \'self\';',
-			'img-src \'self\' https: data: blob:;',
-			'media-src \'self\';',
-			`script-src 'self' 'unsafe-eval' blob: ${this._getScriptCspHashes(data).join(' ')} http://${config.remoteAuthority};`,
-			'child-src \'self\';',
-			`frame-src 'self' https://*.vscode-cdn.net data:;`,
-			'worker-src \'self\' data: blob:;',
-			'style-src \'self\' \'unsafe-inline\';',
-			'connect-src \'self\' ws: wss: https:;',
-			'font-src \'self\' blob:;',
-			'manifest-src \'self\';'
-		].join(' ');
-
-		const headers: http.OutgoingHttpHeaders = {
-			'Content-Type': 'text/html',
-			'Content-Security-Policy': cspDirectives
-		};
-		if (this._connectionToken.type !== ServerConnectionTokenType.None) {
-			headers['Set-Cookie'] = cookie.serialize(
-				connectionTokenCookieName,
-				this._connectionToken.value,
-				{ sameSite: 'lax', maxAge: 60 * 60 * 24 * 7 }
-			);
-		}
-
-		res.writeHead(200, headers);
-		return void res.end(data);
+		const filePath = FileAccess.asFileUri('vs/mobile/browser/mobile.html').fsPath;
+		return this._serveHTML(req, res, filePath, config.values, config.WORKBENCH_NLS_BASE_URL, config.useTestResolver, config.remoteAuthority);
 	}
 
 	private _getScriptCspHashes(content: string): string[] {

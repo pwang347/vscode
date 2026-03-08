@@ -176,7 +176,6 @@ function getEntryPointsForTarget(target: BuildTarget): string[] {
 			return [
 				...workerEntryPoints,
 				'vs/workbench/workbench.web.main.internal', // web workbench only (no browser shell)
-				...mobileEntryPoints,
 				...keyboardMapEntryPoints,
 			];
 		default:
@@ -224,7 +223,6 @@ function getCssBundleEntryPointsForTarget(target: BuildTarget): Set<string> {
 		case 'web':
 			return new Set([
 				'vs/workbench/workbench.web.main.internal',
-				'vs/mobile/browser/mobile',
 			]);
 		default:
 			throw new Error(`Unknown target: ${target}`);
@@ -1050,6 +1048,50 @@ async function watch(): Promise<void> {
 		// Continue watching anyway
 	}
 
+	// Start the mobile bundle watcher — uses esbuild's native incremental
+	// watch mode to produce a bundled mobile.js + mobile.css in out/.
+	// This runs alongside the file-level transpiler so that /chat serves
+	// a single bundle instead of thousands of individual modules.
+	const tslibPath = path.join(REPO_ROOT, 'node_modules/tslib/tslib.es6.js');
+	const tslib = await fs.promises.readFile(tslibPath, 'utf-8');
+	const mobileBundleBanner = {
+		js: `/*!--------------------------------------------------------\n * Copyright (C) Microsoft Corporation. All rights reserved.\n *--------------------------------------------------------*/\n${tslib}`,
+		css: `/*!--------------------------------------------------------\n * Copyright (C) Microsoft Corporation. All rights reserved.\n *--------------------------------------------------------*/`,
+	};
+	const mobileBundleCtx = await esbuild.context({
+		entryPoints: [{ in: path.join(REPO_ROOT, SRC_DIR, 'vs/mobile/browser/mobile.ts'), out: 'vs/mobile/browser/mobile' }],
+		outdir: path.join(REPO_ROOT, outDir),
+		bundle: true,
+		format: 'esm',
+		platform: 'neutral',
+		target: ['es2024'],
+		packages: 'external',
+		sourcemap: 'linked',
+		sourcesContent: true,
+		treeShaking: true,
+		banner: mobileBundleBanner,
+		plugins: [fileContentMapperPlugin(outDir, 'server-web')],
+		loader: {
+			'.ttf': 'file',
+			'.svg': 'file',
+			'.png': 'file',
+			'.sh': 'file',
+		},
+		assetNames: 'media/[name]',
+		logLevel: 'info',
+		logOverride: {
+			'unsupported-require-call': 'silent',
+		},
+		tsconfigRaw: JSON.stringify({
+			compilerOptions: {
+				experimentalDecorators: true,
+				useDefineForClassFields: false,
+			}
+		}),
+	});
+	await mobileBundleCtx.watch();
+	console.log('[watch] Mobile bundle watcher started');
+
 	let pendingTsFiles: Set<string> = new Set();
 	let pendingCopyFiles: Set<string> = new Set();
 
@@ -1118,6 +1160,7 @@ async function watch(): Promise<void> {
 	process.on('SIGINT', () => {
 		console.log('\n[watch] Stopping...');
 		watchStream.end();
+		mobileBundleCtx.dispose();
 		process.exit(0);
 	});
 }
