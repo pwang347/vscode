@@ -8,7 +8,7 @@ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase 
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { IConnectionService, IServerInfo } from '../../../services/connection/connectionService.js';
+import { IConnectionService, IServerInfo } from '../../../services/connection/browser/connectionService.js';
 import { $, append } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { MobileSessionEditableContext } from '../../../common/contextkeys.js';
@@ -130,7 +130,7 @@ class ConnectionContribution extends Disposable implements IWorkbenchContributio
 		if (this.connectionService.sessionEditable) {
 			const params = new URLSearchParams(mainWindow.location.search);
 			if (params.has('remoteAuthority')) {
-				const lastServer = (this.connectionService as import('../../../services/connection/connectionService.js').ConnectionService).getLastServer();
+				const lastServer = (this.connectionService as import('../../../services/connection/browser/connectionService.js').ConnectionService).getLastServer();
 				if (lastServer) {
 					this.connectionService.connect(lastServer);
 				}

@@ -171,7 +171,7 @@ import { McpGalleryService } from '../platform/mcp/common/mcpGalleryService.js';
 import { AllowedMcpServersService } from '../platform/mcp/common/allowedMcpServersService.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
-import { IConnectionService, ConnectionService } from './services/connection/connectionService.js';
+import { IConnectionService, ConnectionService } from './services/connection/browser/connectionService.js';
 
 registerSingleton(IUserDataSyncLogService, UserDataSyncLogService, InstantiationType.Delayed);
 registerSingleton(IAllowedExtensionsService, AllowedExtensionsService, InstantiationType.Delayed);
@@ -192,7 +192,7 @@ registerSingleton(IAllowedMcpServersService, AllowedMcpServersService, Instantia
 registerSingleton(IConnectionService, ConnectionService, InstantiationType.Delayed);
 
 // Haptic feedback (Capacitor)
-import './services/haptics/hapticFeedbackService.js';
+import './services/haptics/browser/hapticFeedbackService.js';
 
 //#endregion
 

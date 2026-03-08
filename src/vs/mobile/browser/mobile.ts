@@ -18,7 +18,7 @@ import { BrowserMain } from '../../workbench/browser/web.main.js';
 import { domContentLoaded, getWindow } from '../../base/browser/dom.js';
 import { Emitter } from '../../base/common/event.js';
 import { MobileWorkbench, IMobileWorkbenchOptions } from './workbench.js';
-import { MobileURLCallbackProvider } from '../services/url/mobileUrlCallbackProvider.js';
+import { MobileURLCallbackProvider } from '../services/url/browser/mobileUrlCallbackProvider.js';
 import type { ISecretStorageProvider } from '../../platform/secrets/common/secrets.js';
 
 // Import mobile entry point — brings in the full web workbench

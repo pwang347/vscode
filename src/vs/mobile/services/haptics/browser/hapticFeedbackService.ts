@@ -3,9 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
-import { InstantiationType, registerSingleton } from '../../../platform/instantiation/common/extensions.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { mainWindow } from '../../../../base/browser/window.js';
+import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
 export const IHapticFeedbackService = createDecorator<IHapticFeedbackService>('mobileHapticFeedbackService');
 
@@ -82,8 +83,8 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 		super();
 
 		// Respect system accessibility setting
-		this.prefersReducedMotion = typeof matchMedia !== 'undefined' &&
-			matchMedia('(prefers-reduced-motion: reduce)').matches;
+		this.prefersReducedMotion = typeof mainWindow.matchMedia !== 'undefined' &&
+			mainWindow.matchMedia('(prefers-reduced-motion: reduce)').matches;
 	}
 
 	private getHapticsPlugin(): ICapacitorHaptics | undefined {

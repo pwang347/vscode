@@ -8,7 +8,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { MobileURLCallbackProvider } from '../../../services/url/mobileUrlCallbackProvider.js';
+import { MobileURLCallbackProvider } from '../../../services/url/browser/mobileUrlCallbackProvider.js';
 
 /**
  * Capacitor Browser plugin interface for opening URLs in the system browser.

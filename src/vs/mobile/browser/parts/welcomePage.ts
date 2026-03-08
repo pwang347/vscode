@@ -9,7 +9,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { Codicon } from '../../../base/common/codicons.js';
 import { localize } from '../../../nls.js';
-import { IServerInfo } from '../../services/connection/connectionService.js';
+import { IServerInfo } from '../../services/connection/browser/connectionService.js';
 
 /**
  * Welcome page — the first screen shown to the user when not connected.

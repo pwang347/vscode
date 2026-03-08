@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Emitter } from '../../../base/common/event.js';
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { URI, UriComponents } from '../../../base/common/uri.js';
-import type { IURLCallbackProvider } from '../../../workbench/services/url/browser/urlService.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { URI, UriComponents } from '../../../../base/common/uri.js';
+import type { IURLCallbackProvider } from '../../../../workbench/services/url/browser/urlService.js';
 
 /**
  * Capacitor App plugin interface for listening to deep-link URL opens.

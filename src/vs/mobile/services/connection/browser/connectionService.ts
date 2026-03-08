@@ -3,10 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable } from '../../../base/common/lifecycle.js';
-import { Emitter } from '../../../base/common/event.js';
-import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { mainWindow } from '../../../../base/browser/window.js';
+import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
 export const IConnectionService = createDecorator<IConnectionService>('mobileConnectionService');
 
@@ -22,8 +23,8 @@ export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
 export interface IConnectionService {
 	readonly _serviceBrand: undefined;
 
-	readonly onDidChangeStatus: import('../../../base/common/event.js').Event<ConnectionStatus>;
-	readonly onDidChangeServer: import('../../../base/common/event.js').Event<IServerInfo | undefined>;
+	readonly onDidChangeStatus: import('../../../../base/common/event.js').Event<ConnectionStatus>;
+	readonly onDidChangeServer: import('../../../../base/common/event.js').Event<IServerInfo | undefined>;
 
 	readonly status: ConnectionStatus;
 	readonly currentServer: IServerInfo | undefined;
@@ -129,7 +130,7 @@ export class ConnectionService extends Disposable implements IConnectionService 
 
 			// Check if we already have the correct remoteAuthority in the URL.
 			// If so, just update the status — no reload needed.
-			const currentParams = new URLSearchParams(window.location.search);
+			const currentParams = new URLSearchParams(mainWindow.location.search);
 			const desiredAuthority = `${server.address}:${server.port}`;
 			if (currentParams.get('remoteAuthority') === desiredAuthority) {
 				this.setStatus('connected');
@@ -145,7 +146,7 @@ export class ConnectionService extends Disposable implements IConnectionService 
 			if (server.connectionToken) {
 				params.set('connectionToken', server.connectionToken);
 			}
-			window.location.search = params.toString();
+			mainWindow.location.search = params.toString();
 		} catch {
 			this.setStatus('disconnected');
 			throw new Error(`Failed to connect to ${server.address}:${server.port}`);

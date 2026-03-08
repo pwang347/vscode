@@ -6,7 +6,7 @@
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
-import { IHapticFeedbackService, HapticImpactStyle } from '../../services/haptics/hapticFeedbackService.js';
+import { IHapticFeedbackService, HapticImpactStyle } from '../../services/haptics/browser/hapticFeedbackService.js';
 
 export const enum SwipeDirection {
 	Left = 'left',
