@@ -44,9 +44,10 @@ import { IChatContentPartRenderContext } from '../chatContentParts.js';
 import { ChatMarkdownContentPart } from '../chatMarkdownContentPart.js';
 import { ICodeBlockRenderOptions } from '../codeBlockPart.js';
 import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
-import { TerminalToolConfirmationStorageKeys } from '../../../../common/chatTerminalToolStorageKeys.js';
 
-export { TerminalToolConfirmationStorageKeys };
+export const enum TerminalToolConfirmationStorageKeys {
+	TerminalAutoApproveWarningAccepted = 'chat.tools.terminal.autoApprove.warningAccepted'
+}
 
 export interface ITerminalNewAutoApproveRule {
 	key: string;

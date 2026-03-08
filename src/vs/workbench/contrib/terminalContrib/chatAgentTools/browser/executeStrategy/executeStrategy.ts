@@ -161,19 +161,6 @@ export async function trackIdleOnPrompt(
 	idleDurationMs: number,
 	store: DisposableStore,
 ): Promise<void> {
-	// Only schedule when a prompt sequence (A) is seen after an execute sequence (C). This prevents
-	// cases where the command is executed before the prompt is written. While not perfect, sitting
-	// on an A without a C following shortly after is a very good indicator that the command is done
-	// and the terminal is idle. Note that D is treated as a signal for executed since shell
-	// integration sometimes lacks the C sequence either due to limitations in the integation or the
-	// required hooks aren't available.
-	const enum TerminalState {
-		Initial,
-		Prompt,
-		Executing,
-		PromptAfterExecuting,
-	}
-
 	const idleOnPrompt = new DeferredPromise<void>();
 	const onData = instance.onData;
 	const scheduler = store.add(new RunOnceScheduler(() => {
@@ -190,6 +177,18 @@ export async function trackIdleOnPrompt(
 		state = TerminalState.PromptAfterExecuting;
 		scheduler.schedule();
 	}, 1000));
+	// Only schedule when a prompt sequence (A) is seen after an execute sequence (C). This prevents
+	// cases where the command is executed before the prompt is written. While not perfect, sitting
+	// on an A without a C following shortly after is a very good indicator that the command is done
+	// and the terminal is idle. Note that D is treated as a signal for executed since shell
+	// integration sometimes lacks the C sequence either due to limitations in the integation or the
+	// required hooks aren't available.
+	const enum TerminalState {
+		Initial,
+		Prompt,
+		Executing,
+		PromptAfterExecuting,
+	}
 	store.add(onData(e => {
 		// Update state
 		// p10k fires C as `133;C;`

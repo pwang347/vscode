@@ -698,10 +698,9 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 		// User has cancelled the setup
 		else {
-			const isTrusted = this.workspaceTrustManagementService.isWorkspaceTrusted();
 			progress({
 				kind: 'markdownContent',
-				content: isTrusted ? SetupAgent.SETUP_NEEDED_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
+				content: this.workspaceTrustManagementService.isWorkspaceTrusted() ? SetupAgent.SETUP_NEEDED_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
 			});
 		}
 

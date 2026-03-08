@@ -102,7 +102,7 @@ else if (typeof navigator === 'object' && !isElectronRenderer) {
 	_isMacintosh = _userAgent.indexOf('Macintosh') >= 0;
 	_isIOS = (_userAgent.indexOf('Macintosh') >= 0 || _userAgent.indexOf('iPad') >= 0 || _userAgent.indexOf('iPhone') >= 0) && !!navigator.maxTouchPoints && navigator.maxTouchPoints > 0;
 	_isLinux = _userAgent.indexOf('Linux') >= 0;
-	_isMobile = _userAgent?.indexOf('Mobi') >= 0;
+	_isMobile = _userAgent?.indexOf('Mobi') >= 0 || !!$globalThis._VSCODE_MOBILE_APP; // Allow mobile rendering in web browser
 	_isWeb = true;
 	_language = nls.getNLSLanguage() || LANGUAGE_DEFAULT;
 	_locale = navigator.language.toLowerCase();
