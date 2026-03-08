@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:mobile": "vite build --config vite.mobile.config.ts",
     "preview": "vite preview",
+    "build:mobile": "vite build --config vite.mobile.config.ts",
     "watch:mobile": "vite build --config vite.mobile.config.ts --watch"
   },
   "devDependencies": {

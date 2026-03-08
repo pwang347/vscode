@@ -75,6 +75,5 @@ export default defineConfig({
 				mobile: path.resolve(__dirname, 'mobile-vite.html'),
 			},
 		},
-		watch: {},
 	},
 });

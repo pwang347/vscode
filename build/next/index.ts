@@ -123,6 +123,11 @@ const keyboardMapEntryPoints = [
 	'vs/workbench/services/keybinding/browser/keyboardLayouts/layout.contribution.win',
 ];
 
+// Mobile entry points
+const mobileEntryPoints = [
+	'vs/mobile/browser/mobile',
+];
+
 // Server entry points (reh)
 const serverEntryPoints = [
 	'vs/workbench/api/node/extensionHostProcess',
@@ -164,14 +169,14 @@ function getEntryPointsForTarget(target: BuildTarget): string[] {
 				...serverEntryPoints,
 				...workerEntryPoints,
 				...webEntryPoints,
-				'vs/mobile/browser/mobile', // mobile chat endpoint served at /chat
+				...mobileEntryPoints,
 				...keyboardMapEntryPoints,
 			];
 		case 'web':
 			return [
 				...workerEntryPoints,
 				'vs/workbench/workbench.web.main.internal', // web workbench only (no browser shell)
-				'vs/mobile/browser/mobile', // mobile Capacitor shell
+				...mobileEntryPoints,
 				...keyboardMapEntryPoints,
 			];
 		default:

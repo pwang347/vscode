@@ -192,7 +192,6 @@ export default defineConfig({
 			input: {
 				//index: path.resolve(__dirname, 'index.html'),
 				workbench: path.resolve(__dirname, 'workbench-vite.html'),
-				mobile: path.resolve(__dirname, 'mobile-vite.html'),
 			}
 		}
 	},

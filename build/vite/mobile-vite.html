@@ -79,10 +79,10 @@
 	<body aria-label="">
 		<div id="mobile-loading-splash" class="mobile-loading-splash">
 			<div class="spinner"></div>
-			<p id="mobile-loading-msg">Loading assets...</p>
+			<p id="mobile-loading-msg"></p>
 		</div>
 		<script>
-			// Show a contextual loading message based on URL params.
+			// TODO: have a more graceful loading experience that doesn't rely on JavaScript to show a loading message. This is just a temporary solution to provide some feedback to users while the app is loading, especially in cases where the loading time is long (e.g. remote workspaces).
 			(function () {
 				var params = new URLSearchParams(window.location.search);
 				var folder = params.get('folder');
@@ -100,20 +100,20 @@
 
 	<!-- Startup -->
 	<script>
-		globalThis._VSCODE_FILE_ROOT = 'http://localhost:5199/out/';
+		globalThis._VSCODE_FILE_ROOT = new URL('./out/', window.location.origin).href;
 		globalThis._VSCODE_MOBILE_APP = true;
-		// Debug: capture TDZ errors with full stack traces
+		// TODO: remove these handlers once we have proper error handling in place. This is to catch errors that would otherwise be swallowed and leave no indication of what went wrong.
 		window.addEventListener('error', function(e) {
 			if (e.error && e.error.message && e.error.message.indexOf('before initialization') !== -1) {
 				var msg = e.error.message + '\n\nStack:\n' + (e.error.stack || 'no stack');
-				console.error('[TDZ Debug]', msg);
-				alert('[TDZ Debug] ' + e.error.message + '\nFile: ' + e.filename + ':' + e.lineno + ':' + e.colno);
+				console.error('[Unhandled Error]', msg);
+				alert(e.error.message + '\nFile: ' + e.filename + ':' + e.lineno + ':' + e.colno);
 			}
 		});
 		window.addEventListener('unhandledrejection', function(e) {
 			if (e.reason && e.reason.message && e.reason.message.indexOf('before initialization') !== -1) {
-				console.error('[TDZ Debug Promise]', e.reason.message, e.reason.stack);
-				alert('[TDZ Debug Promise] ' + e.reason.message + '\nStack: ' + (e.reason.stack || 'none').substring(0, 500));
+				console.error('[Unhandled Rejection]', e.reason.message, e.reason.stack);
+				alert(e.reason.message + '\nStack: ' + (e.reason.stack || 'none').substring(0, 500));
 			}
 		});
 	</script>
