@@ -29,6 +29,19 @@ export interface IConnectionService {
 	readonly currentServer: IServerInfo | undefined;
 
 	/**
+	 * Whether the session info (server connection) can be edited by the user.
+	 * When false, the connection was provided externally (e.g. by the mobile
+	 * app shell or web browser) and the user cannot change it.
+	 */
+	readonly sessionEditable: boolean;
+
+	/**
+	 * Initialize the connection from externally-provided session info.
+	 * When `editable` is false, the user cannot change the server connection.
+	 */
+	initializeFromExternal(server: IServerInfo, editable: boolean): void;
+
+	/**
 	 * Connect to a remote VS Code server.
 	 * The connection happens over the Tailscale VPN —
 	 * the mobile device and server must both be on the same Tailnet.
@@ -82,14 +95,23 @@ export class ConnectionService extends Disposable implements IConnectionService 
 
 	private _status: ConnectionStatus = 'disconnected';
 	private _currentServer: IServerInfo | undefined;
+	private _sessionEditable = true;
 
 	get status(): ConnectionStatus { return this._status; }
 	get currentServer(): IServerInfo | undefined { return this._currentServer; }
+	get sessionEditable(): boolean { return this._sessionEditable; }
 
 	constructor(
 		@IStorageService private readonly storageService: IStorageService,
 	) {
 		super();
+	}
+
+	initializeFromExternal(server: IServerInfo, editable: boolean): void {
+		this._sessionEditable = editable;
+		this._currentServer = server;
+		this.setStatus('connected');
+		this._onDidChangeServer.fire(server);
 	}
 
 	async connect(server: IServerInfo): Promise<void> {

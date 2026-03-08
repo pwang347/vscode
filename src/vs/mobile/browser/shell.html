@@ -1,0 +1,591 @@
+<!-- Copyright (C) Microsoft Corporation. All rights reserved. -->
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="VS Code" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+		<meta name="theme-color" content="#191A1B" />
+		<title>VS Code</title>
+		<style>
+			/* Codicon font — inline subset for standalone shell */
+			@font-face {
+				font-family: "codicon";
+				font-display: block;
+				src: url("data:font/truetype;charset=utf-8,") format("truetype");
+			}
+
+			:root {
+				/* 2026 Dark theme palette */
+				--bg: #191A1B;
+				--surface: #121314;
+				--fg: #bfbfbf;
+				--fg-secondary: #8C8C8C;
+				--fg-dim: #555555;
+				--accent: #3994BC;
+				--accent-fg: #FFFFFF;
+				--accent-hover: #3E9BC4;
+				--input-bg: #191A1B;
+				--input-border: #333536FF;
+				--input-border-focus: #3994BC;
+				--card-bg: #202122;
+				--card-border: #2A2B2C;
+				--card-hover: #262728;
+				--btn-secondary-bg: #242526;
+				--btn-secondary-fg: #bfbfbf;
+				--danger: #f48771;
+				--danger-bg: #3A1D1D;
+				--safe-top: env(safe-area-inset-top, 0px);
+				--safe-bottom: env(safe-area-inset-bottom, 0px);
+				--radius: 8px;
+				--transition: 150ms ease;
+			}
+
+			* { box-sizing: border-box; margin: 0; padding: 0; }
+
+			html, body {
+				width: 100%; height: 100%;
+				overflow: hidden;
+				background: var(--bg);
+				color: var(--fg);
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				font-size: 14px;
+				-webkit-font-smoothing: antialiased;
+			}
+
+			body {
+				overscroll-behavior: none;
+				-webkit-overflow-scrolling: touch;
+				position: fixed;
+				top: 0; left: 0; right: 0; bottom: 0;
+				padding-top: var(--safe-top);
+				padding-bottom: var(--safe-bottom);
+			}
+
+			/* Codicon helper */
+			.codicon {
+				font: normal normal normal 16px/1 codicon;
+				display: inline-block;
+				text-decoration: none;
+				text-rendering: auto;
+				text-align: center;
+				-webkit-font-smoothing: antialiased;
+				user-select: none;
+			}
+
+			.shell {
+				display: flex;
+				flex-direction: column;
+				height: 100%;
+				padding: 16px;
+				max-width: 480px;
+				margin: 0 auto;
+			}
+
+			/* --- Header --- */
+			.shell-header {
+				text-align: center;
+				padding: 40px 0 24px;
+			}
+
+			.shell-header .header-icon {
+				color: var(--accent);
+				font-size: 32px;
+				margin-bottom: 12px;
+			}
+
+			.shell-header h1 {
+				font-size: 20px;
+				font-weight: 600;
+				color: var(--fg);
+			}
+
+			.shell-header p {
+				color: var(--fg-secondary);
+				font-size: 13px;
+				margin-top: 4px;
+			}
+
+			/* --- Section label --- */
+			.section-label {
+				font-size: 11px;
+				font-weight: 600;
+				color: var(--fg-secondary);
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				padding: 0 2px;
+				margin-bottom: 6px;
+			}
+
+			/* --- Server list --- */
+			.server-list {
+				flex: 1;
+				overflow-y: auto;
+				-webkit-overflow-scrolling: touch;
+				margin-bottom: 12px;
+			}
+
+			.server-card {
+				background: var(--card-bg);
+				border: 1px solid var(--card-border);
+				border-radius: var(--radius);
+				padding: 12px;
+				margin-bottom: 6px;
+				display: flex;
+				align-items: center;
+				cursor: pointer;
+				-webkit-tap-highlight-color: transparent;
+				transition: background var(--transition);
+			}
+
+			.server-card:active {
+				background: var(--card-hover);
+			}
+
+			.server-card .server-icon {
+				width: 32px;
+				height: 32px;
+				border-radius: 6px;
+				background: var(--bg);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				margin-right: 12px;
+				flex-shrink: 0;
+				color: var(--fg-secondary);
+				font-size: 16px;
+			}
+
+			.server-card .server-info {
+				flex: 1;
+				min-width: 0;
+			}
+
+			.server-card .name {
+				font-weight: 500;
+				font-size: 14px;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.server-card .address {
+				color: var(--fg-dim);
+				font-size: 12px;
+				margin-top: 1px;
+			}
+
+			.server-card .chevron {
+				color: var(--fg-dim);
+				font-size: 16px;
+				margin-left: 8px;
+				flex-shrink: 0;
+			}
+
+			.server-card .remove-btn {
+				background: none;
+				border: none;
+				color: var(--fg-dim);
+				font-size: 16px;
+				cursor: pointer;
+				padding: 6px;
+				border-radius: 4px;
+				transition: background var(--transition);
+				line-height: 1;
+				flex-shrink: 0;
+				margin-left: 4px;
+			}
+
+			.server-card .remove-btn:active {
+				background: var(--card-hover);
+			}
+
+			/* --- Form --- */
+			.add-server-form {
+				padding: 4px 0 12px;
+			}
+
+			.form-row {
+				margin-bottom: 12px;
+			}
+
+			.form-row label {
+				display: block;
+				font-size: 12px;
+				color: var(--fg-secondary);
+				margin-bottom: 4px;
+				font-weight: 500;
+			}
+
+			.form-row input {
+				width: 100%;
+				padding: 10px 12px;
+				background: var(--input-bg);
+				border: 1px solid var(--input-border);
+				border-radius: var(--radius);
+				color: var(--fg);
+				font-size: 14px;
+				outline: none;
+				transition: border-color var(--transition);
+			}
+
+			.form-row input::placeholder {
+				color: var(--fg-dim);
+			}
+
+			.form-row input:focus {
+				border-color: var(--input-border-focus);
+			}
+
+			/* --- Buttons --- */
+			.btn {
+				width: 100%;
+				padding: 10px;
+				border: none;
+				border-radius: var(--radius);
+				font-size: 14px;
+				font-weight: 600;
+				cursor: pointer;
+				-webkit-tap-highlight-color: transparent;
+				transition: background var(--transition);
+			}
+
+			.btn-primary {
+				background: var(--accent);
+				color: var(--accent-fg);
+			}
+
+			.btn-primary:active {
+				background: var(--accent-hover);
+			}
+
+			.btn-secondary {
+				background: var(--btn-secondary-bg);
+				color: var(--btn-secondary-fg);
+				margin-top: 8px;
+			}
+
+			.btn-secondary:active {
+				background: #2C2D2E;
+			}
+
+			/* --- Status --- */
+			.status-bar {
+				text-align: center;
+				padding: 8px;
+				font-size: 11px;
+				color: var(--fg-dim);
+			}
+
+			/* --- Overlay --- */
+			.connecting-overlay {
+				display: none;
+				position: fixed;
+				top: 0; left: 0; right: 0; bottom: 0;
+				background: rgba(25, 26, 27, 0.9);
+				backdrop-filter: blur(4px);
+				-webkit-backdrop-filter: blur(4px);
+				z-index: 100;
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+			}
+
+			.connecting-overlay.visible {
+				display: flex;
+			}
+
+			.spinner {
+				width: 28px; height: 28px;
+				border: 2px solid var(--card-border);
+				border-top-color: var(--accent);
+				border-radius: 50%;
+				animation: spin 0.8s linear infinite;
+			}
+
+			.connecting-overlay p {
+				margin-top: 12px;
+				font-size: 13px;
+				color: var(--fg-secondary);
+			}
+
+			.connecting-overlay .cancel-btn {
+				margin-top: 16px;
+				background: none;
+				border: none;
+				color: var(--accent);
+				padding: 8px 20px;
+				border-radius: var(--radius);
+				cursor: pointer;
+				font-size: 13px;
+				font-weight: 500;
+			}
+
+			.connecting-overlay .cancel-btn:active {
+				background: var(--card-hover);
+			}
+
+			@keyframes spin {
+				to { transform: rotate(360deg); }
+			}
+
+			.error-msg {
+				color: var(--danger);
+				font-size: 13px;
+				margin-top: 8px;
+				padding: 8px 12px;
+				background: var(--danger-bg);
+				border-radius: var(--radius);
+				display: none;
+			}
+
+			.hidden { display: none !important; }
+		</style>
+	</head>
+	<body>
+		<div class="shell">
+			<div class="shell-header">
+				<div class="header-icon">&#xEB3A;</div>
+				<h1>VS Code</h1>
+				<p>Connect to a remote server</p>
+			</div>
+
+			<div id="server-list" class="server-list"></div>
+
+			<div class="add-server-form">
+				<div class="section-label" id="form-label">Add Server</div>
+				<div class="form-row">
+					<label for="server-address">Server address</label>
+					<input id="server-address" type="text" placeholder="myserver:9888" autocapitalize="off" autocorrect="off" spellcheck="false" />
+				</div>
+				<div class="form-row">
+					<label for="server-token">Connection token</label>
+					<input id="server-token" type="password" placeholder="Token (if required)" autocapitalize="off" autocorrect="off" spellcheck="false" />
+				</div>
+				<div id="error-msg" class="error-msg"></div>
+				<button id="connect-btn" class="btn btn-primary">Connect</button>
+			</div>
+
+			<div class="status-bar">
+				<span id="version-info"></span>
+			</div>
+		</div>
+
+		<div id="connecting-overlay" class="connecting-overlay">
+			<div class="spinner"></div>
+			<p id="connecting-msg">Connecting...</p>
+			<button class="cancel-btn" id="cancel-btn">Cancel</button>
+		</div>
+
+		<script>
+			(async () => {
+				'use strict';
+
+				const STORAGE_KEY = 'mobile.savedServers';
+				const LAST_ATTEMPT_KEY = 'mobile.lastAttemptedServer';
+
+				// --- Storage ---
+				// localStorage is fast & synchronous but WebViews (especially iOS
+				// WKWebView) can silently discard it between app restarts.
+				// Capacitor Preferences uses native SharedPreferences / UserDefaults
+				// which always survives — use it as the source of truth, with
+				// localStorage as a fast cache for synchronous reads.
+
+				function getCapPrefs() {
+					try { return window.Capacitor?.Plugins?.Preferences; } catch { return null; }
+				}
+
+				async function readNativeStorage() {
+					const Prefs = getCapPrefs();
+					if (!Prefs) { return []; }
+					try {
+						const { value } = await Prefs.get({ key: STORAGE_KEY });
+						return value ? JSON.parse(value) : [];
+					} catch { return []; }
+				}
+
+				function writeNativeStorage(servers) {
+					const Prefs = getCapPrefs();
+					if (!Prefs) { return; }
+					Prefs.set({ key: STORAGE_KEY, value: JSON.stringify(servers) }).catch(() => {});
+				}
+
+				function getSavedServers() {
+					try {
+						const raw = localStorage.getItem(STORAGE_KEY);
+						if (raw) {
+							const servers = JSON.parse(raw);
+							if (servers.length > 0) {
+								return servers;
+							}
+						}
+					} catch { /* fall through */ }
+					return [];
+				}
+
+				function saveServers(servers) {
+					try { localStorage.setItem(STORAGE_KEY, JSON.stringify(servers)); } catch { /* ignore */ }
+					writeNativeStorage(servers);
+				}
+
+				function addServer(address, token) {
+					const servers = getSavedServers().filter(s => s.address !== address);
+					servers.unshift({ address, token, lastUsed: Date.now() });
+					saveServers(servers);
+				}
+
+				function removeServer(address) {
+					saveServers(getSavedServers().filter(s => s.address !== address));
+				}
+
+				// --- UI ---
+				const listEl = document.getElementById('server-list');
+				const addressInput = document.getElementById('server-address');
+				const tokenInput = document.getElementById('server-token');
+				const connectBtn = document.getElementById('connect-btn');
+				const formLabel = document.getElementById('form-label');
+				const errorMsg = document.getElementById('error-msg');
+				const overlay = document.getElementById('connecting-overlay');
+				const connectingMsg = document.getElementById('connecting-msg');
+				const cancelBtn = document.getElementById('cancel-btn');
+
+				function renderServerList() {
+					const servers = getSavedServers();
+					if (servers.length === 0) {
+						listEl.innerHTML = '';
+						return;
+					}
+					listEl.innerHTML = '<div class="section-label">Recent</div>' + servers.map(s => `
+						<div class="server-card" data-address="${escapeHTML(s.address)}" data-token="${escapeHTML(s.token || '')}">
+							<div class="server-icon codicon">&#xEB50;</div>
+							<div class="server-info">
+								<div class="name">${escapeHTML(s.address)}</div>
+								<div class="address">${new Date(s.lastUsed).toLocaleDateString()}</div>
+							</div>
+							<span class="chevron codicon">&#xEAB6;</span>
+							<button class="remove-btn codicon" data-remove="${escapeHTML(s.address)}">&#xEA76;</button>
+						</div>
+					`).join('');
+				}
+
+				function escapeHTML(str) {
+					const div = document.createElement('div');
+					div.textContent = str;
+					return div.innerHTML;
+				}
+
+				function showError(msg) {
+					errorMsg.textContent = msg;
+					errorMsg.style.display = 'block';
+				}
+
+				function clearError() {
+					errorMsg.style.display = 'none';
+				}
+
+				// --- Connection ---
+				let abortController = null;
+
+				function prefillForm(address, token) {
+					addressInput.value = address;
+					tokenInput.value = token;
+					formLabel.textContent = 'Edit Server';
+					// Prevent copying the pre-filled token
+					tokenInput.oncopy = (e) => e.preventDefault();
+					tokenInput.oncut = (e) => e.preventDefault();
+				}
+
+				async function connectToServer(address, token) {
+					clearError();
+
+					// Normalize address
+					if (!address.includes(':')) {
+						address += ':9888'; // default port
+					}
+
+					// Save server and navigate directly to the /chat endpoint.
+					// The server handles token validation via the tkn query param
+					// (sets a cookie and redirects). We skip a preflight fetch
+					// because cross-origin requests from the WebView are blocked
+					// by CORS — navigating directly works fine.
+					addServer(address, token);
+
+					// Remember the attempt so we can pre-fill the form if the user
+					// navigates back after a failed connection.
+					sessionStorage.setItem(LAST_ATTEMPT_KEY, JSON.stringify({ address, token }));
+					prefillForm(address, token);
+
+					overlay.classList.add('visible');
+					connectingMsg.textContent = `Connecting to ${address}...`;
+
+					const protocol = 'http';
+					const chatUrl = `${protocol}://${address}/chat${token ? '?tkn=' + encodeURIComponent(token) : ''}`;
+					window.location.href = chatUrl;
+				}
+
+				// --- Events ---
+				connectBtn.addEventListener('click', () => {
+					const address = addressInput.value.trim();
+					if (!address) {
+						showError('Please enter a server address');
+						return;
+					}
+					connectToServer(address, tokenInput.value.trim());
+				});
+
+				cancelBtn.addEventListener('click', () => {
+					if (abortController) {
+						abortController.abort();
+					}
+					overlay.classList.remove('visible');
+				});
+
+				listEl.addEventListener('click', (e) => {
+					const removeBtn = e.target.closest('[data-remove]');
+					if (removeBtn) {
+						e.stopPropagation();
+						removeServer(removeBtn.dataset.remove);
+						renderServerList();
+						return;
+					}
+					const card = e.target.closest('.server-card');
+					if (card) {
+						connectToServer(card.dataset.address, card.dataset.token);
+					}
+				});
+
+				// Also connect on Enter key
+				addressInput.addEventListener('keydown', (e) => {
+					if (e.key === 'Enter') { connectBtn.click(); }
+				});
+				tokenInput.addEventListener('keydown', (e) => {
+					if (e.key === 'Enter') { connectBtn.click(); }
+				});
+
+				// --- Init ---
+				// Restore from native storage if localStorage was cleared.
+				if (getSavedServers().length === 0) {
+					const nativeServers = await readNativeStorage();
+					if (nativeServers.length > 0) {
+						try { localStorage.setItem(STORAGE_KEY, JSON.stringify(nativeServers)); } catch { /* ignore */ }
+					}
+				}
+
+				renderServerList();
+
+				// If the user is returning after a failed connection attempt,
+				// pre-fill the form with the server they tried.
+				try {
+					const last = JSON.parse(sessionStorage.getItem(LAST_ATTEMPT_KEY) || 'null');
+					if (last && last.address) {
+						prefillForm(last.address, last.token || '');
+						sessionStorage.removeItem(LAST_ATTEMPT_KEY);
+					}
+				} catch { /* ignore */ }
+			})();
+		</script>
+	</body>
+</html>

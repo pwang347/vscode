@@ -10,7 +10,7 @@
 		<!-- Mobile-specific meta tags -->
 		<meta name="mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
-		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 		<meta name="apple-mobile-web-app-title" content="VS Code" />
 		<link rel="apple-touch-icon" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/code-192.png" />
 
@@ -18,7 +18,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
 		<!-- Theme color for browser chrome -->
-		<meta name="theme-color" content="#ffffff" />
+		<meta name="theme-color" content="#1e1e1e" />
 
 		<!-- Workbench Configuration -->
 		<meta id="vscode-workbench-web-configuration" data-settings="{{WORKBENCH_WEB_CONFIGURATION}}" />
@@ -26,10 +26,13 @@
 		<!-- Workbench Auth Session -->
 		<meta id="vscode-workbench-auth-session" data-settings="{{WORKBENCH_AUTH_SESSION}}" />
 
+		<!-- Builtin Extensions (running out of sources) -->
+		<meta id="vscode-workbench-builtin-extensions" data-settings="{{WORKBENCH_BUILTIN_EXTENSIONS}}" />
+
 		<!-- Workbench Icon/Manifest/CSS -->
 		<link rel="icon" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/favicon.ico" type="image/x-icon" />
 		<link rel="manifest" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/manifest.json" crossorigin="use-credentials" />
-		<link rel="stylesheet" href="{{WORKBENCH_WEB_BASE_URL}}/out/vs/mobile/browser/mobile.css" />
+		<style id="vscode-css-modules" type="text/css" media="screen"></style>
 
 		<style>
 			/* Critical CSS to prevent FOUC and set safe area insets */
@@ -52,59 +55,11 @@
 				left: 0;
 				right: 0;
 				bottom: 0;
-				background: #ffffff;
-			}
-
-			/* Loading spinner shown while JS bundles download and parse */
-			.mobile-loading-splash {
-				position: fixed;
-				top: 0; left: 0; right: 0; bottom: 0;
-				background: #ffffff;
-				z-index: 10000;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				flex-direction: column;
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-				color: #616161;
-			}
-			.mobile-loading-splash .spinner {
-				width: 32px; height: 32px;
-				border: 3px solid #cecece;
-				border-top-color: #007acc;
-				border-radius: 50%;
-				animation: mobile-spin 0.8s linear infinite;
-			}
-			.mobile-loading-splash p {
-				margin-top: 12px;
-				font-size: 14px;
-			}
-			@keyframes mobile-spin {
-				to { transform: rotate(360deg); }
 			}
 		</style>
 	</head>
 
 	<body aria-label="">
-		<div id="mobile-loading-splash" class="mobile-loading-splash">
-			<div class="spinner"></div>
-			<p id="mobile-loading-msg">Loading...</p>
-		</div>
-		<script>
-			// Show a contextual loading message based on URL params.
-			(function () {
-				var params = new URLSearchParams(window.location.search);
-				var folder = params.get('folder');
-				var msgEl = document.getElementById('mobile-loading-msg');
-				if (folder && msgEl) {
-					var path = folder.replace(/^vscode-remote:\/\/[^/]*/, '');
-					var name = path.split('/').filter(Boolean).pop() || folder;
-					msgEl.textContent = 'Loading workspace ' + name + '\u2026';
-				} else if (msgEl) {
-					msgEl.textContent = 'Loading\u2026';
-				}
-			})();
-		</script>
 	</body>
 
 	<!-- Startup (do not modify order of script tags!) -->
@@ -114,21 +69,31 @@
 		globalThis._VSCODE_MOBILE_APP = true;
 	</script>
 	<script>
+		const sheet = document.getElementById('vscode-css-modules').sheet;
+		globalThis._VSCODE_CSS_LOAD = function (url) {
+			sheet.insertRule(`@import url(${url});`);
+		};
+
+		const importMap = { imports: {} };
+		const cssModules = JSON.parse('{{WORKBENCH_DEV_CSS_MODULES}}');
+		for (const cssModule of cssModules) {
+			const cssUrl = new URL(cssModule, globalThis._VSCODE_FILE_ROOT).href;
+			const jsSrc = `globalThis._VSCODE_CSS_LOAD('${cssUrl}');\n`;
+			const blob = new Blob([jsSrc], { type: 'application/javascript' });
+			importMap.imports[cssUrl] = URL.createObjectURL(blob);
+		}
+		const importMapElement = document.createElement('script');
+		importMapElement.type = 'importmap';
+		importMapElement.setAttribute('nonce', '1nline-m4p')
+		importMapElement.textContent = JSON.stringify(importMap, undefined, 2);
+		document.head.appendChild(importMapElement);
+	</script>
+	<script>
 		performance.mark('code/willLoadWorkbenchMain');
 	</script>
 	<!-- always ensure built in english NLS messages -->
 	<script type="module" src="{{WORKBENCH_NLS_FALLBACK_URL}}"></script>
 	<!-- attempt to load NLS messages in case non-english -->
-	<script>
-		(function() {
-			const nlsUrl = '{{WORKBENCH_NLS_URL}}';
-			if (nlsUrl) {
-				const s = document.createElement('script');
-				s.type = 'module';
-				s.src = nlsUrl;
-				document.head.appendChild(s);
-			}
-		})();
-	</script>
+	<script type="module" src="{{WORKBENCH_NLS_URL}}"></script>
 	<script type="module" src="{{WORKBENCH_WEB_BASE_URL}}/out/vs/mobile/browser/mobile.js"></script>
 </html>

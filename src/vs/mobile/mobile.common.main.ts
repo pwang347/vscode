@@ -33,6 +33,13 @@ import './contrib/externalOpener/browser/mobileExternalOpener.contribution.js';
 //#endregion
 
 
+//#region --- mobile background connection keeper
+
+import './contrib/connection/browser/backgroundConnectionKeeper.contribution.js';
+
+//#endregion
+
+
 //#region --- API Extension Points
 
 import '../workbench/services/actions/common/menusExtensionPoint.js';
@@ -105,7 +112,7 @@ import '../workbench/services/workingCopy/common/workingCopyEditorService.js';
 import '../workbench/services/filesConfiguration/common/filesConfigurationService.js';
 import '../workbench/services/views/browser/viewDescriptorService.js';
 import '../workbench/services/views/browser/viewsService.js';
-import '../workbench/services/quickinput/browser/quickInputService.js';
+import './services/quickinput/browser/mobileQuickInputService.js';
 import '../workbench/services/userDataSync/browser/userDataSyncWorkbenchService.js';
 import '../workbench/services/authentication/browser/authenticationService.js';
 import '../workbench/services/authentication/browser/authenticationExtensionsService.js';
@@ -183,6 +190,9 @@ registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed
 registerSingleton(IMcpGalleryService, McpGalleryService, InstantiationType.Delayed);
 registerSingleton(IAllowedMcpServersService, AllowedMcpServersService, InstantiationType.Delayed);
 registerSingleton(IConnectionService, ConnectionService, InstantiationType.Delayed);
+
+// Haptic feedback (Capacitor)
+import './services/haptics/hapticFeedbackService.js';
 
 //#endregion
 
@@ -281,6 +291,9 @@ import '../workbench/contrib/meteredConnection/browser/meteredConnection.contrib
 
 // Mobile Connection (server management UI)
 import './contrib/connection/browser/connection.contribution.js';
+
+// Mobile Chat (haptic feedback on send)
+import './contrib/chat/browser/chat.contribution.js';
 
 // Mobile Layout (bottom nav bar, simplified chrome)
 import './contrib/mobileLayout/browser/mobileLayout.contribution.js';

@@ -164,6 +164,7 @@ function getEntryPointsForTarget(target: BuildTarget): string[] {
 				...serverEntryPoints,
 				...workerEntryPoints,
 				...webEntryPoints,
+				'vs/mobile/browser/mobile', // mobile chat endpoint served at /chat
 				...keyboardMapEntryPoints,
 			];
 		case 'web':
@@ -213,6 +214,7 @@ function getCssBundleEntryPointsForTarget(target: BuildTarget): Set<string> {
 			return new Set([
 				'vs/workbench/workbench.web.main.internal',
 				'vs/code/browser/workbench/workbench',
+				'vs/mobile/browser/mobile',
 			]);
 		case 'web':
 			return new Set([

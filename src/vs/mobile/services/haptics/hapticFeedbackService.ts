@@ -5,6 +5,7 @@
 
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
+import { InstantiationType, registerSingleton } from '../../../platform/instantiation/common/extensions.js';
 
 export const IHapticFeedbackService = createDecorator<IHapticFeedbackService>('mobileHapticFeedbackService');
 
@@ -52,6 +53,16 @@ interface ICapacitorHaptics {
 }
 
 /**
+ * Native JS bridge injected by the mobile app's WebView via
+ * addJavascriptInterface. Persists across navigations, so it
+ * remains available even on remote code-server pages where
+ * Capacitor plugins are not injected.
+ */
+interface IMobileNativeHapticsBridge {
+	hapticImpact(style: string): void;
+}
+
+/**
  * Haptic feedback service for mobile.
  *
  * In the Capacitor app, this bridges to the @capacitor/haptics native plugin
@@ -65,14 +76,10 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 
 	declare readonly _serviceBrand: undefined;
 
-	private readonly isCapacitorApp: boolean;
 	private readonly prefersReducedMotion: boolean;
 
 	constructor() {
 		super();
-
-		// Detect if running inside a Capacitor WebView
-		this.isCapacitorApp = typeof (globalThis as Record<string, unknown>).Capacitor !== 'undefined';
 
 		// Respect system accessibility setting
 		this.prefersReducedMotion = typeof matchMedia !== 'undefined' &&
@@ -88,17 +95,36 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 		}
 	}
 
+	private getNativeBridge(): IMobileNativeHapticsBridge | undefined {
+		try {
+			const bridge = (globalThis as Record<string, unknown>).MobileNative as IMobileNativeHapticsBridge | undefined;
+			return bridge && typeof bridge.hapticImpact === 'function' ? bridge : undefined;
+		} catch {
+			return undefined;
+		}
+	}
+
 	async impact(style: HapticImpactStyle): Promise<void> {
 		if (this.prefersReducedMotion) {
 			return;
 		}
 
-		if (this.isCapacitorApp) {
+		const haptics = this.getHapticsPlugin();
+		if (haptics) {
 			try {
-				const haptics = this.getHapticsPlugin();
-				await haptics?.impact({ style });
+				await haptics.impact({ style });
+				return;
 			} catch {
-				// Plugin not available — fail silently
+				// fall through to native bridge
+			}
+		}
+
+		const bridge = this.getNativeBridge();
+		if (bridge) {
+			try {
+				bridge.hapticImpact(style);
+			} catch {
+				// Native bridge not available
 			}
 		}
 	}
@@ -108,10 +134,10 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 			return;
 		}
 
-		if (this.isCapacitorApp) {
+		const haptics = this.getHapticsPlugin();
+		if (haptics) {
 			try {
-				const haptics = this.getHapticsPlugin();
-				await haptics?.notification({ type });
+				await haptics.notification({ type });
 			} catch {
 				// Plugin not available
 			}
@@ -123,13 +149,15 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 			return;
 		}
 
-		if (this.isCapacitorApp) {
+		const haptics = this.getHapticsPlugin();
+		if (haptics) {
 			try {
-				const haptics = this.getHapticsPlugin();
-				await haptics?.selectionChanged();
+				await haptics.selectionChanged();
 			} catch {
 				// Plugin not available
 			}
 		}
 	}
 }
+
+registerSingleton(IHapticFeedbackService, HapticFeedbackService, InstantiationType.Delayed);

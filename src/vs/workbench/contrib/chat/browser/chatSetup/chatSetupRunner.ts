@@ -97,6 +97,7 @@ export class ChatSetup {
 	}
 
 	private async doRun(options?: { disableChatViewReveal?: boolean; forceSignInDialog?: boolean; additionalScopes?: readonly string[]; forceAnonymous?: ChatSetupAnonymous; dialogIcon?: ThemeIcon; dialogTitle?: string; dialogHideSkip?: boolean }): Promise<IChatSetupResult> {
+		console.log('[chat setup] doRun called, options:', JSON.stringify(options));
 		this.context.update({ later: false });
 
 		const dialogSkipped = this.skipDialogOnce;
@@ -105,6 +106,7 @@ export class ChatSetup {
 		const trusted = await this.workspaceTrustRequestService.requestWorkspaceTrust({
 			message: localize('chatWorkspaceTrust', "AI features are currently only supported in trusted workspaces.")
 		});
+		console.log('[chat setup] workspace trust result:', trusted);
 		if (!trusted) {
 			this.context.update({ later: true });
 			this.telemetryService.publicLog2<InstallChatEvent, InstallChatClassification>('commandCenter.chatInstall', { installResult: 'failedNotTrusted', installDuration: 0, signUpErrorCode: undefined, provider: undefined });
@@ -114,11 +116,15 @@ export class ChatSetup {
 
 		let setupStrategy: ChatSetupStrategy;
 		if (!options?.forceSignInDialog && (dialogSkipped || isProUser(this.chatEntitlementService.entitlement) || this.chatEntitlementService.entitlement === ChatEntitlement.Free)) {
+			console.log('[chat setup] skipping dialog (existing user or dialogSkipped)');
 			setupStrategy = ChatSetupStrategy.DefaultSetup; // existing pro/free users setup without a dialog
 		} else if (options?.forceAnonymous === ChatSetupAnonymous.EnabledWithoutDialog) {
+			console.log('[chat setup] anonymous setup without dialog');
 			setupStrategy = ChatSetupStrategy.DefaultSetup; // anonymous setup without a dialog
 		} else {
+			console.log('[chat setup] showing dialog...');
 			setupStrategy = await this.showDialog(options);
+			console.log('[chat setup] dialog result:', setupStrategy);
 		}
 
 		if (setupStrategy === ChatSetupStrategy.DefaultSetup && this.defaultAccountService.getDefaultAccountAuthenticationProvider().enterprise) {

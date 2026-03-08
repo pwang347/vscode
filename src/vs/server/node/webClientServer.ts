@@ -94,6 +94,7 @@ const APP_ROOT = dirname(FileAccess.asFileUri('').fsPath);
 
 const STATIC_PATH = `/static`;
 const CALLBACK_PATH = `/callback`;
+const CHAT_PATH = `/chat`;
 const WEB_EXTENSION_PATH = `/web-extension-resource`;
 
 export class WebClientServer {
@@ -127,6 +128,9 @@ export class WebClientServer {
 			}
 			if (pathname === '/') {
 				return this._handleRoot(req, res, parsedUrl);
+			}
+			if (pathname === CHAT_PATH) {
+				return this._handleChat(req, res, parsedUrl);
 			}
 			if (pathname === CALLBACK_PATH) {
 				// callback support
@@ -235,44 +239,24 @@ export class WebClientServer {
 	}
 
 	/**
-	 * Handle HTTP requests for /
+	 * Resolve common configuration needed by both the workbench and chat endpoints.
 	 */
-	private async _handleRoot(req: http.IncomingMessage, res: http.ServerResponse, parsedUrl: url.UrlWithParsedQuery): Promise<void> {
-
+	private async _resolveWebClientConfiguration(req: http.IncomingMessage, parsedUrl: url.UrlWithParsedQuery): Promise<{
+		basePath: string;
+		remoteAuthority: string;
+		useTestResolver: boolean;
+		staticRoute: string;
+		callbackRoute: string;
+		webExtensionRoute: string;
+		values: { [key: string]: string };
+		WORKBENCH_NLS_BASE_URL: string | undefined;
+	} | undefined> {
 		const getFirstHeader = (headerName: string) => {
 			const val = req.headers[headerName];
 			return Array.isArray(val) ? val[0] : val;
 		};
 
-		// Prefix routes with basePath for clients
 		const basePath = getFirstHeader('x-forwarded-prefix') || this._basePath;
-
-		const queryConnectionToken = parsedUrl.query[connectionTokenQueryName];
-		if (typeof queryConnectionToken === 'string') {
-			// We got a connection token as a query parameter.
-			// We want to have a clean URL, so we strip it
-			const responseHeaders: Record<string, string> = Object.create(null);
-			responseHeaders['Set-Cookie'] = cookie.serialize(
-				connectionTokenCookieName,
-				queryConnectionToken,
-				{
-					sameSite: 'lax',
-					maxAge: 60 * 60 * 24 * 7 /* 1 week */
-				}
-			);
-
-			const newQuery = Object.create(null);
-			for (const key in parsedUrl.query) {
-				if (key !== connectionTokenQueryName) {
-					newQuery[key] = parsedUrl.query[key];
-				}
-			}
-			const newLocation = url.format({ pathname: basePath, query: newQuery });
-			responseHeaders['Location'] = newLocation;
-
-			res.writeHead(302, responseHeaders);
-			return void res.end();
-		}
 
 		const replacePort = (host: string, port: string) => {
 			const index = host?.indexOf(':');
@@ -283,14 +267,14 @@ export class WebClientServer {
 			return host;
 		};
 
-		const useTestResolver = (!this._environmentService.isBuilt && this._environmentService.args['use-test-resolver']);
+		const useTestResolver = !!((!this._environmentService.isBuilt && this._environmentService.args['use-test-resolver']));
 		let remoteAuthority = (
 			useTestResolver
 				? 'test+test'
 				: (getFirstHeader('x-original-host') || getFirstHeader('x-forwarded-host') || req.headers.host)
 		);
 		if (!remoteAuthority) {
-			return serveError(req, res, 400, `Bad request.`);
+			return undefined;
 		}
 		const forwardedPort = getFirstHeader('x-forwarded-port');
 		if (forwardedPort) {
@@ -303,8 +287,6 @@ export class WebClientServer {
 
 		let _wrapWebWorkerExtHostInIframe: undefined | false = undefined;
 		if (this._environmentService.args['enable-smoke-test-driver']) {
-			// integration tests run at a time when the built output is not yet published to the CDN
-			// so we must disable the iframe wrapping because the iframe URL will give a 404
 			_wrapWebWorkerExtHostInIframe = false;
 		}
 
@@ -322,9 +304,6 @@ export class WebClientServer {
 		const callbackRoute = posix.join(basePath, this._productPath, CALLBACK_PATH);
 		const webExtensionRoute = posix.join(basePath, this._productPath, WEB_EXTENSION_PATH);
 
-		const resolveWorkspaceURI = (defaultLocation?: string) => defaultLocation && URI.file(resolve(defaultLocation)).with({ scheme: Schemas.vscodeRemote, authority: remoteAuthority });
-
-		const filePath = FileAccess.asFileUri(`vs/code/browser/workbench/workbench${this._environmentService.isBuilt ? '' : '-dev'}.html`).fsPath;
 		const authSessionInfo = !this._environmentService.isBuilt && this._environmentService.args['github-auth'] ? {
 			id: generateUuid(),
 			providerId: 'github',
@@ -364,8 +343,8 @@ export class WebClientServer {
 			developmentOptions: { enableSmokeTestDriver: this._environmentService.args['enable-smoke-test-driver'] ? true : undefined, logLevel: this._logService.getLevel() },
 			settingsSyncOptions: !this._environmentService.isBuilt && this._environmentService.args['enable-sync'] ? { enabled: true } : undefined,
 			enableWorkspaceTrust: !this._environmentService.args['disable-workspace-trust'],
-			folderUri: resolveWorkspaceURI(this._environmentService.args['default-folder']),
-			workspaceUri: resolveWorkspaceURI(this._environmentService.args['default-workspace']),
+			folderUri: undefined as (URI | undefined),
+			workspaceUri: undefined as (URI | undefined),
 			productConfiguration,
 			callbackRoute: callbackRoute
 		};
@@ -389,11 +368,6 @@ export class WebClientServer {
 			WORKBENCH_NLS_FALLBACK_URL: `${staticRoute}/out/nls.messages.js`
 		};
 
-		// DEV ---------------------------------------------------------------------------------------
-		// DEV: This is for development and enables loading CSS via import-statements via import-maps.
-		// DEV: The server needs to send along all CSS modules so that the client can construct the
-		// DEV: import-map.
-		// DEV ---------------------------------------------------------------------------------------
 		if (this._cssDevService.isEnabled) {
 			const cssModules = await this._cssDevService.getCssModules();
 			values['WORKBENCH_DEV_CSS_MODULES'] = JSON.stringify(cssModules);
@@ -408,10 +382,17 @@ export class WebClientServer {
 			values['WORKBENCH_BUILTIN_EXTENSIONS'] = asJSON(bundledExtensions);
 		}
 
+		return { basePath, remoteAuthority, useTestResolver, staticRoute, callbackRoute, webExtensionRoute, values, WORKBENCH_NLS_BASE_URL };
+	}
+
+	/**
+	 * Render an HTML template with the given values and send the response with CSP headers.
+	 */
+	private async _serveHTML(req: http.IncomingMessage, res: http.ServerResponse, templatePath: string, values: { [key: string]: string }, WORKBENCH_NLS_BASE_URL: string | undefined, useTestResolver: boolean, remoteAuthority: string): Promise<void> {
 		let data;
 		try {
-			const workbenchTemplate = (await promises.readFile(filePath)).toString();
-			data = workbenchTemplate.replace(/\{\{([^}]+)\}\}/g, (_, key) => values[key] ?? 'undefined');
+			const template = (await promises.readFile(templatePath)).toString();
+			data = template.replace(/\{\{([^}]+)\}\}/g, (_, key) => values[key] ?? 'undefined');
 		} catch (e) {
 			res.writeHead(404, { 'Content-Type': 'text/plain' });
 			return void res.end('Not found');
@@ -423,7 +404,7 @@ export class WebClientServer {
 			'default-src \'self\';',
 			'img-src \'self\' https: data: blob:;',
 			'media-src \'self\';',
-			`script-src 'self' 'unsafe-eval' ${WORKBENCH_NLS_BASE_URL ?? ''} blob: 'nonce-1nline-m4p' ${this._getScriptCspHashes(data).join(' ')} '${webWorkerExtensionHostIframeScriptSHA}' 'sha256-/r7rqQ+yrxt57sxLuQ6AMYcy/lUpvAIzHjIJt/OeLWU=' ${useTestResolver ? '' : `http://${remoteAuthority}`};`,  // the sha is the same as in src/vs/workbench/services/extensions/worker/webWorkerExtensionHostIframe.html
+			`script-src 'self' 'unsafe-eval' ${WORKBENCH_NLS_BASE_URL ?? ''} blob: 'nonce-1nline-m4p' ${this._getScriptCspHashes(data).join(' ')} '${webWorkerExtensionHostIframeScriptSHA}' 'sha256-/r7rqQ+yrxt57sxLuQ6AMYcy/lUpvAIzHjIJt/OeLWU=' ${useTestResolver ? '' : `http://${remoteAuthority}`};`,
 			'child-src \'self\';',
 			`frame-src 'self' https://*.vscode-cdn.net data:;`,
 			'worker-src \'self\' data: blob:;',
@@ -438,9 +419,6 @@ export class WebClientServer {
 			'Content-Security-Policy': cspDirectives
 		};
 		if (this._connectionToken.type !== ServerConnectionTokenType.None) {
-			// At this point we know the client has a valid cookie
-			// and we want to set it prolong it to ensure that this
-			// client is valid for another 1 week at least
 			headers['Set-Cookie'] = cookie.serialize(
 				connectionTokenCookieName,
 				this._connectionToken.value,
@@ -448,6 +426,150 @@ export class WebClientServer {
 					sameSite: 'lax',
 					maxAge: 60 * 60 * 24 * 7 /* 1 week */
 				}
+			);
+		}
+
+		res.writeHead(200, headers);
+		return void res.end(data);
+	}
+
+	/**
+	 * Handle HTTP requests for /
+	 */
+	private async _handleRoot(req: http.IncomingMessage, res: http.ServerResponse, parsedUrl: url.UrlWithParsedQuery): Promise<void> {
+		const getFirstHeader = (headerName: string) => {
+			const val = req.headers[headerName];
+			return Array.isArray(val) ? val[0] : val;
+		};
+		const basePath = getFirstHeader('x-forwarded-prefix') || this._basePath;
+
+		const queryConnectionToken = parsedUrl.query[connectionTokenQueryName];
+		if (typeof queryConnectionToken === 'string') {
+			const responseHeaders: Record<string, string> = Object.create(null);
+			responseHeaders['Set-Cookie'] = cookie.serialize(
+				connectionTokenCookieName,
+				queryConnectionToken,
+				{
+					sameSite: 'lax',
+					maxAge: 60 * 60 * 24 * 7 /* 1 week */
+				}
+			);
+
+			const newQuery = Object.create(null);
+			for (const key in parsedUrl.query) {
+				if (key !== connectionTokenQueryName) {
+					newQuery[key] = parsedUrl.query[key];
+				}
+			}
+			const newLocation = url.format({ pathname: basePath, query: newQuery });
+			responseHeaders['Location'] = newLocation;
+
+			res.writeHead(302, responseHeaders);
+			return void res.end();
+		}
+
+		const config = await this._resolveWebClientConfiguration(req, parsedUrl);
+		if (!config) {
+			return serveError(req, res, 400, `Bad request.`);
+		}
+
+		const resolveWorkspaceURI = (defaultLocation?: string) => defaultLocation && URI.file(resolve(defaultLocation)).with({ scheme: Schemas.vscodeRemote, authority: config.remoteAuthority });
+
+		// Patch in workspace URIs from server args (only for the standard workbench)
+		function asJSON(value: unknown): string {
+			return JSON.stringify(value).replace(/"/g, '&quot;');
+		}
+		const workbenchWebConfiguration = JSON.parse(config.values['WORKBENCH_WEB_CONFIGURATION'].replace(/&quot;/g, '"'));
+		workbenchWebConfiguration.folderUri = resolveWorkspaceURI(this._environmentService.args['default-folder']);
+		workbenchWebConfiguration.workspaceUri = resolveWorkspaceURI(this._environmentService.args['default-workspace']);
+		config.values['WORKBENCH_WEB_CONFIGURATION'] = asJSON(workbenchWebConfiguration);
+
+		const filePath = FileAccess.asFileUri(`vs/code/browser/workbench/workbench${this._environmentService.isBuilt ? '' : '-dev'}.html`).fsPath;
+		return this._serveHTML(req, res, filePath, config.values, config.WORKBENCH_NLS_BASE_URL, config.useTestResolver, config.remoteAuthority);
+	}
+
+	/**
+	 * Handle HTTP requests for /chat — serves the mobile workbench.
+	 *
+	 * In dev mode, serves the pre-built Vite bundle (~8 requests).
+	 * Run `cd build/vite && npx vite build --watch --config vite.mobile.config.ts`.
+	 * Falls back to unbundled `mobile-dev.html` if no bundle exists.
+	 */
+	private async _handleChat(req: http.IncomingMessage, res: http.ServerResponse, parsedUrl: url.UrlWithParsedQuery): Promise<void> {
+		const config = await this._resolveWebClientConfiguration(req, parsedUrl);
+		if (!config) {
+			return serveError(req, res, 400, `Bad request.`);
+		}
+
+		if (this._environmentService.isBuilt) {
+			const filePath = FileAccess.asFileUri('vs/mobile/browser/mobile.html').fsPath;
+			return this._serveHTML(req, res, filePath, config.values, config.WORKBENCH_NLS_BASE_URL, config.useTestResolver, config.remoteAuthority);
+		}
+
+		return this._serveMobileBundle(req, res, config);
+	}
+
+	/**
+	 * Serve the pre-built Vite mobile bundle, injecting server configuration
+	 * and rewriting asset paths to go through /static/.
+	 */
+	private async _serveMobileBundle(req: http.IncomingMessage, res: http.ServerResponse, config: { staticRoute: string; remoteAuthority: string; useTestResolver: boolean; values: { [key: string]: string }; WORKBENCH_NLS_BASE_URL: string | undefined }): Promise<void> {
+		const bundlePath = join(APP_ROOT, 'out-vscode-mobile-bundle', 'build', 'vite', 'mobile-vite.html');
+		let data: string;
+		try {
+			data = (await promises.readFile(bundlePath)).toString();
+		} catch {
+			// No bundle — fall back to unbundled dev HTML
+			const filePath = FileAccess.asFileUri('vs/mobile/browser/mobile-dev.html').fsPath;
+			return this._serveHTML(req, res, filePath, config.values, config.WORKBENCH_NLS_BASE_URL, config.useTestResolver, config.remoteAuthority);
+		}
+
+		const bundleBase = `${config.staticRoute}/out-vscode-mobile-bundle/`;
+
+		// Rewrite relative asset paths to absolute /static/ paths
+		data = data.replace(/(["'])(?:\.\.\/)*assets\//g, `$1${bundleBase}assets/`);
+
+		// Remove `crossorigin` attributes that Vite adds — they cause CORS
+		// issues when served from the same-origin code server
+		data = data.replace(/ crossorigin/g, '');
+
+		// Rewrite _VSCODE_FILE_ROOT to a full HTTP URL pointing to the code
+		// server's static route. Using a path-only value (e.g. /oss-dev/static/out/)
+		// causes FileAccess to generate file:// URIs which are blocked by CSP.
+		data = data.replace(
+			/globalThis\._VSCODE_FILE_ROOT\s*=\s*['"][^'"]*['"]/,
+			`globalThis._VSCODE_FILE_ROOT = 'http://${config.remoteAuthority}${config.staticRoute}/out/'`
+		);
+
+		// Apply standard template substitution for {{WORKBENCH_WEB_CONFIGURATION}},
+		// {{WORKBENCH_AUTH_SESSION}}, {{WORKBENCH_BUILTIN_EXTENSIONS}}, etc.
+		// This uses the same mechanism as _serveHTML to safely inject the config.
+		data = data.replace(/\{\{([^}]+)\}\}/g, (_, key) => config.values[key] ?? '');
+
+		// Serve with CSP headers
+		const cspDirectives = [
+			'default-src \'self\';',
+			'img-src \'self\' https: data: blob:;',
+			'media-src \'self\';',
+			`script-src 'self' 'unsafe-eval' blob: ${this._getScriptCspHashes(data).join(' ')} http://${config.remoteAuthority};`,
+			'child-src \'self\';',
+			`frame-src 'self' https://*.vscode-cdn.net data:;`,
+			'worker-src \'self\' data: blob:;',
+			'style-src \'self\' \'unsafe-inline\';',
+			'connect-src \'self\' ws: wss: https:;',
+			'font-src \'self\' blob:;',
+			'manifest-src \'self\';'
+		].join(' ');
+
+		const headers: http.OutgoingHttpHeaders = {
+			'Content-Type': 'text/html',
+			'Content-Security-Policy': cspDirectives
+		};
+		if (this._connectionToken.type !== ServerConnectionTokenType.None) {
+			headers['Set-Cookie'] = cookie.serialize(
+				connectionTokenCookieName,
+				this._connectionToken.value,
+				{ sameSite: 'lax', maxAge: 60 * 60 * 24 * 7 }
 			);
 		}
 

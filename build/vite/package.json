@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:mobile": "vite build --config vite.mobile.config.ts",
+    "preview": "vite preview",
+    "watch:mobile": "vite build --config vite.mobile.config.ts --watch"
   },
   "devDependencies": {
     "@vscode/component-explorer": "^0.1.1-19",

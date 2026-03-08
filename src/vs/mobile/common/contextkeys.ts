@@ -21,6 +21,7 @@ export const MobilePhaseContext = new RawContextKey<string>('mobilePhase', 'welc
 //#region < --- Connection --- >
 
 export const MobileConnectionStatusContext = new RawContextKey<string>('mobileConnectionStatus', 'disconnected', localize('mobileConnectionStatus', "The current mobile connection status: connected, reconnecting, or disconnected"));
+export const MobileSessionEditableContext = new RawContextKey<boolean>('mobileSessionEditable', true, localize('mobileSessionEditable', "Whether the mobile session connection can be edited by the user"));
 
 //#endregion
 

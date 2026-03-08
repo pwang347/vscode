@@ -24,7 +24,6 @@ export interface INavigationTab {
 const DEFAULT_TABS: INavigationTab[] = [
 	{ id: MobileTab.Chat, label: localize('chat', "Chat"), icon: Codicon.commentDiscussion },
 	{ id: MobileTab.Files, label: localize('files', "Files"), icon: Codicon.files },
-	{ id: MobileTab.Terminal, label: localize('terminal', "Terminal"), icon: Codicon.terminal },
 ];
 
 /**

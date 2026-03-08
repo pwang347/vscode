@@ -74,6 +74,11 @@ export class TopBar extends Disposable {
 		return 44;
 	}
 
+	/** Programmatically fire the back event (e.g. from hardware back button). */
+	fireBack(): void {
+		this._onDidPressBack.fire();
+	}
+
 	show(): void {
 		this.container.style.display = '';
 	}

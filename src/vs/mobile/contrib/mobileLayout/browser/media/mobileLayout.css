@@ -63,3 +63,12 @@
 .mobile-app .monaco-workbench .part.panel {
 	min-width: 100% !important;
 }
+
+/* ---- Explorer file list — taller rows for touch ---- */
+
+/* Override the hardcoded 22px height/line-height so the label fills the 44px row */
+.mobile-app .explorer-folders-view .explorer-item,
+.mobile-app .explorer-folders-view .editor-group {
+	height: 100%;
+	line-height: 44px;
+}

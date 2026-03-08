@@ -18,6 +18,7 @@ import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase 
  * - Voice input integration via the Speech contribution
  * - Mobile keyboard handling (input stays above virtual keyboard)
  * - Attachment picker using native file picker on Capacitor
+ * - Haptic feedback on message send (wired in MobileWorkbench.createChatWidget)
  */
 class MobileChatContribution extends Disposable implements IWorkbenchContribution {
 

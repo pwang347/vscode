@@ -6,6 +6,7 @@
 import * as dom from '../../../../base/browser/dom.js';
 import { RenderIndentGuides } from '../../../../base/browser/ui/tree/abstractTree.js';
 import { IHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
+import { isMobile } from '../../../../base/common/platform.js';
 import { IObjectTreeElement, ObjectTreeElementCollapseState } from '../../../../base/browser/ui/tree/tree.js';
 import { IIdentityProvider } from '../../../../base/browser/ui/list/list.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
@@ -109,8 +110,8 @@ export class QuickInputTreeController extends Disposable {
 				alwaysConsumeMouseWheel: true,
 				hideTwistiesOfChildlessElements: true,
 				renderIndentGuides: RenderIndentGuides.None,
-				expandOnDoubleClick: true,
-				expandOnlyOnTwistieClick: true,
+				expandOnDoubleClick: !isMobile,
+				expandOnlyOnTwistieClick: !isMobile,
 				disableExpandOnSpacebar: true,
 				sorter: this._sorter,
 				filter: this._filter,

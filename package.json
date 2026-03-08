@@ -68,6 +68,7 @@
     "minify-vscode": "npm run gulp minify-vscode",
     "minify-vscode-reh": "npm run gulp minify-vscode-reh",
     "minify-vscode-reh-web": "npm run gulp minify-vscode-reh-web",
+    "bundle-server-web": "npx tsx build/next/index.ts bundle --target server-web --nls --out out-vscode-reh-web",
     "hygiene": "npm run gulp hygiene",
     "core-ci": "npm run gulp core-ci",
     "core-ci-pr": "npm run gulp core-ci-pr",

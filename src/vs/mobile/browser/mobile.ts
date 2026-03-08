@@ -17,8 +17,9 @@ import type { IWebSocketFactory, IWebSocket } from '../../platform/remote/browse
 import { BrowserMain } from '../../workbench/browser/web.main.js';
 import { domContentLoaded, getWindow } from '../../base/browser/dom.js';
 import { Emitter } from '../../base/common/event.js';
-import { MobileWorkbench } from './workbench.js';
+import { MobileWorkbench, IMobileWorkbenchOptions } from './workbench.js';
 import { MobileURLCallbackProvider } from '../services/url/mobileUrlCallbackProvider.js';
+import type { ISecretStorageProvider } from '../../platform/secrets/common/secrets.js';
 
 // Import mobile entry point — brings in the full web workbench
 // services plus mobile-specific services and contributions.
@@ -121,13 +122,21 @@ class MobileWorkspaceProvider extends Disposable implements IWorkspaceProvider {
  */
 class MobileBrowserMain extends BrowserMain {
 
+	constructor(
+		domElement: HTMLElement,
+		configuration: IWorkbenchConstructionOptions,
+		private readonly mobileOptions?: IMobileWorkbenchOptions,
+	) {
+		super(domElement, configuration);
+	}
+
 	override async open(): Promise<never> {
 
 		// Init services and wait for DOM to be ready in parallel
 		const [services] = await Promise.all([this.initServices(), domContentLoaded(getWindow(this.domElement))]);
 
 		// Create Mobile Workbench (custom layout with connection bar, navigation bar, etc.)
-		const workbench = new MobileWorkbench(this.domElement, undefined, services.serviceCollection, services.logService);
+		const workbench = new MobileWorkbench(this.domElement, this.mobileOptions, services.serviceCollection, services.logService);
 
 		// Startup
 		workbench.startup();
@@ -175,6 +184,58 @@ function createMobileWebSocketFactory(): IWebSocketFactory {
 	};
 }
 
+/**
+ * Persists secrets (auth tokens) in localStorage so the user doesn't have
+ * to re-authenticate on every page load. Uses transparent (no-op) encryption
+ * since we're in a sandboxed WebView — there is no OS keychain available.
+ */
+class MobileSecretStorageProvider implements ISecretStorageProvider {
+
+	private static readonly STORAGE_KEY = 'mobile.secrets';
+
+	type = 'persisted' as const;
+
+	private readonly _secrets: Promise<Record<string, string>>;
+
+	constructor() {
+		this._secrets = this._load();
+	}
+
+	private async _load(): Promise<Record<string, string>> {
+		const raw = localStorage.getItem(MobileSecretStorageProvider.STORAGE_KEY);
+		if (raw) {
+			try {
+				return JSON.parse(raw);
+			} catch {
+				localStorage.removeItem(MobileSecretStorageProvider.STORAGE_KEY);
+			}
+		}
+		return {};
+	}
+
+	private async _save(): Promise<void> {
+		localStorage.setItem(MobileSecretStorageProvider.STORAGE_KEY, JSON.stringify(await this._secrets));
+	}
+
+	async get(key: string): Promise<string | undefined> {
+		return (await this._secrets)[key];
+	}
+
+	async set(key: string, value: string): Promise<void> {
+		(await this._secrets)[key] = value;
+		await this._save();
+	}
+
+	async delete(key: string): Promise<void> {
+		delete (await this._secrets)[key];
+		await this._save();
+	}
+
+	async keys(): Promise<string[]> {
+		return Object.keys(await this._secrets);
+	}
+}
+
 (async function () {
 
 	// Read workbench configuration from the DOM (injected by server)
@@ -208,6 +269,9 @@ function createMobileWebSocketFactory(): IWebSocketFactory {
 		// https://localhost, so the default factory picks wss://, but the
 		// VS Code dev server runs plain HTTP/WS.
 		webSocketFactory: remoteAuthority ? createMobileWebSocketFactory() : undefined,
+		// Persist auth tokens (GitHub, etc.) in localStorage so the user
+		// doesn't have to re-authenticate on every page load / navigation.
+		secretStorageProvider: new MobileSecretStorageProvider(),
 		// Enable OAuth callback flow on mobile. The MobileURLCallbackProvider
 		// listens for deep-link URL opens from the Capacitor App plugin,
 		// allowing GitHub OAuth to redirect back to the app.
@@ -219,10 +283,7 @@ function createMobileWebSocketFactory(): IWebSocketFactory {
 			// For the mobile app to install extensions (e.g. GitHub Copilot Chat
 			// during the sign-in setup flow), we need the VS Marketplace config.
 			// The server may provide it via config; fall back to the public gallery.
-			extensionsGallery: config.productConfiguration?.extensionsGallery ?? product.extensionsGallery ?? {
-				serviceUrl: 'https://marketplace.visualstudio.com/_apis/public/gallery',
-				itemUrl: 'https://marketplace.visualstudio.com/items',
-			},
+			extensionsGallery: config.productConfiguration?.extensionsGallery ?? product.extensionsGallery,
 			// The OSS product.json doesn't include extensionEnabledApiProposals.
 			// Copilot extensions require proposed API access to register chat
 			// participants and use private APIs. Merge from server config or
@@ -263,8 +324,35 @@ function createMobileWebSocketFactory(): IWebSocketFactory {
 			// Without this, activateByEvent hangs forever waiting for the broken
 			// web worker host, blocking auth provider activation and sign-in.
 			'extensions.webWorker': false,
+			// Mobile uses its own welcome page and chat-first flow; suppress the
+			// built-in welcome editor that would otherwise open on startup.
+			'workbench.startupEditor': 'none',
 		}
 	};
+
+	// Build mobile workbench options with external session info.
+	// When the web browser provides remoteAuthority via URL or server config,
+	// the session is forced (non-editable) — the user cannot change the server.
+	// On the mobile app shell, the native side manages connections and can
+	// pass session info with editable=true to allow the user to switch servers.
+	let mobileOptions: IMobileWorkbenchOptions | undefined;
+	if (remoteAuthority) {
+		const [address, portStr] = remoteAuthority.split(':');
+		mobileOptions = {
+			sessionInfo: {
+				server: {
+					name: address,
+					address,
+					port: parseInt(portStr || '9888', 10),
+					connectionToken: typeof connectionToken === 'string' ? connectionToken : undefined,
+				},
+				// Web browser sessions are non-editable by default.
+				// The mobile app shell can override this by injecting
+				// a 'mobileSessionEditable' meta tag or query param.
+				editable: urlParams.get('mobileSessionEditable') === 'true',
+			},
+		};
+	}
 
 	// Launch the workbench
 	mark('code/didLoadWorkbenchMain');
@@ -272,11 +360,18 @@ function createMobileWebSocketFactory(): IWebSocketFactory {
 		// Add mobile class for CSS overrides
 		mainWindow.document.body.classList.add('mobile-app');
 
+		// Grab a reference to the loading splash (defined in mobile.html)
+		// before the workbench modifies the DOM, so we can remove it after startup.
+		const loadingSplash = mainWindow.document.body.firstElementChild as HTMLElement | null;
+
 		// Always use MobileBrowserMain which creates the MobileWorkbench
 		// with custom layout. When connected (remoteAuthority set),
 		// MobileWorkbench creates real ChatWidget, file tree, and terminal
 		// widgets backed by the remote server's services.
-		await new MobileBrowserMain(mainWindow.document.body, options).open();
+		await new MobileBrowserMain(mainWindow.document.body, options, {
+			...mobileOptions,
+			loadingSplash: loadingSplash ?? undefined,
+		}).open();
 	} catch (error) {
 		console.error('[mobile] Failed to start workbench:', error);
 		mainWindow.document.body.textContent = String(error);

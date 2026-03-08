@@ -30,7 +30,7 @@ import { IParsedLabelWithIcons, getCodiconAriaLabel, matchesFuzzyIconAware, pars
 import { Lazy } from '../../../base/common/lazy.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
 import { observableValue, observableValueOpts, transaction } from '../../../base/common/observable.js';
-import { OS } from '../../../base/common/platform.js';
+import { OS, isMobile } from '../../../base/common/platform.js';
 import { escape, ltrim } from '../../../base/common/strings.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
@@ -275,7 +275,10 @@ class QuickInputItemDelegate implements IListVirtualDelegate<IQuickPickElement> 
 	getHeight(element: IQuickPickElement): number {
 
 		if (element instanceof QuickPickSeparatorElement) {
-			return 30;
+			return isMobile ? 36 : 30;
+		}
+		if (isMobile) {
+			return element.saneDetail ? 56 : 36;
 		}
 		return element.saneDetail ? 44 : 22;
 	}

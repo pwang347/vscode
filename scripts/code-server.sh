@@ -23,9 +23,16 @@ function code() {
 
 	popd
 
-	NODE_ENV=development \
-	VSCODE_DEV=1 \
-	$NODE $ROOT/scripts/code-server.js "$@"
+	# When running the bundled server, don't set VSCODE_DEV so
+	# the server resolves resources from the bundle output directory.
+	if [[ " $@ " == *" --bundle "* ]]; then
+		NODE_ENV=development \
+		$NODE $ROOT/scripts/code-server.js "$@"
+	else
+		NODE_ENV=development \
+		VSCODE_DEV=1 \
+		$NODE $ROOT/scripts/code-server.js "$@"
+	fi
 }
 
 code "$@"

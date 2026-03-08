@@ -255,6 +255,13 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 	}
 
 	private async doInvoke(request: IChatAgentRequest, progress: (part: IChatProgress) => void, chatService: IChatService, languageModelsService: ILanguageModelsService, chatWidgetService: IChatWidgetService, chatAgentService: IChatAgentService, languageModelToolsService: ILanguageModelToolsService, defaultAccountService: IDefaultAccountService): Promise<IChatAgentResult> {
+		console.log('[chat setup] doInvoke state:', JSON.stringify({
+			installed: this.context.state.installed,
+			disabled: this.context.state.disabled,
+			untrusted: this.context.state.untrusted,
+			entitlement: this.context.state.entitlement,
+			anonymous: this.chatEntitlementService.anonymous,
+		}));
 		if (
 			!this.context.state.installed ||									// Extension not installed: run setup to install
 			this.context.state.disabled ||										// Extension disabled: run setup to enable
@@ -698,9 +705,11 @@ export class SetupAgent extends Disposable implements IChatAgentImplementation {
 
 		// User has cancelled the setup
 		else {
+			const isTrusted = this.workspaceTrustManagementService.isWorkspaceTrusted();
+			console.log('[chat setup] setup cancelled/undefined, workspace trusted:', isTrusted, 'result:', JSON.stringify(result));
 			progress({
 				kind: 'markdownContent',
-				content: this.workspaceTrustManagementService.isWorkspaceTrusted() ? SetupAgent.SETUP_NEEDED_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
+				content: isTrusted ? SetupAgent.SETUP_NEEDED_MESSAGE : SetupAgent.TRUST_NEEDED_MESSAGE
 			});
 		}
 

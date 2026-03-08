@@ -19,18 +19,30 @@ interface ICapacitorBrowserPlugin {
 }
 
 /**
- * Overrides the default external opener on mobile to use the Capacitor
- * Browser plugin. This opens URLs in the system browser (Safari/Chrome)
- * rather than `window.open()`, which is critical for the OAuth flow:
+ * Native JS bridge injected by the mobile app via WebView.addJavascriptInterface.
+ * Persists across WebView navigations, so it remains available even when the
+ * WebView is serving content from a remote code server (where Capacitor
+ * plugins may not be injected).
+ */
+interface IMobileNativeBridge {
+	openExternal(url: string): void;
+}
+
+/**
+ * Overrides the default external opener on mobile to open URLs in an in-app
+ * browser (Chrome Custom Tabs on Android, SFSafariViewController on iOS)
+ * rather than the system browser or `window.open()`.
  *
- * - In-app `window.open()` may be blocked by the Capacitor WebView
- * - Even if opened, the in-app browser cannot redirect back to the app
- *   via custom URI schemes (`code-oss://`)
- * - The system browser properly handles the `code-oss://` redirect,
- *   allowing the OS to route it back to the app
+ * Uses two strategies depending on what's available:
+ * 1. **Capacitor Browser plugin** — available when the Capacitor bridge is
+ *    injected (e.g. when serving from local webDir).
+ * 2. **MobileNative JS bridge** — injected by the native app via
+ *    `addJavascriptInterface`, persists across navigations. Used when the
+ *    WebView has navigated to a remote code server where Capacitor plugins
+ *    may not be available.
  *
- * For non-Capacitor environments (browser testing), this falls back
- * to the standard `window.open()` behavior.
+ * Both paths open an in-app browser that the user can dismiss to return
+ * to the app, and both support the `code-oss://` redirect for OAuth.
  */
 class MobileExternalOpenerContribution extends Disposable implements IWorkbenchContribution {
 
@@ -42,13 +54,25 @@ class MobileExternalOpenerContribution extends Disposable implements IWorkbenchC
 		super();
 
 		const browserPlugin = this._getBrowserPlugin();
+		const nativeBridge = this._getNativeBridge();
+
 		if (browserPlugin) {
 			openerService.setDefaultExternalOpener({
 				openExternal: async (href: string) => {
 					if (matchesSomeScheme(href, Schemas.http, Schemas.https)) {
 						await browserPlugin.open({ url: href });
 					} else {
-						// For non-HTTP schemes (e.g. mailto:), let the OS handle it
+						mainWindow.location.href = href;
+					}
+					return true;
+				}
+			});
+		} else if (nativeBridge) {
+			openerService.setDefaultExternalOpener({
+				openExternal: async (href: string) => {
+					if (matchesSomeScheme(href, Schemas.http, Schemas.https)) {
+						nativeBridge.openExternal(href);
+					} else {
 						mainWindow.location.href = href;
 					}
 					return true;
@@ -59,6 +83,15 @@ class MobileExternalOpenerContribution extends Disposable implements IWorkbenchC
 
 	private _getBrowserPlugin(): ICapacitorBrowserPlugin | undefined {
 		return MobileURLCallbackProvider.getBrowserPlugin() as ICapacitorBrowserPlugin | undefined;
+	}
+
+	private _getNativeBridge(): IMobileNativeBridge | undefined {
+		try {
+			const bridge = (mainWindow as unknown as Record<string, unknown>).MobileNative as IMobileNativeBridge | undefined;
+			return bridge && typeof bridge.openExternal === 'function' ? bridge : undefined;
+		} catch {
+			return undefined;
+		}
 	}
 }
 

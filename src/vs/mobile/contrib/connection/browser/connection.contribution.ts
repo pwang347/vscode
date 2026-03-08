@@ -11,6 +11,8 @@ import { localize, localize2 } from '../../../../nls.js';
 import { IConnectionService, IServerInfo } from '../../../services/connection/connectionService.js';
 import { $, append } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
+import { MobileSessionEditableContext } from '../../../common/contextkeys.js';
+import { navigateToShell } from '../../../browser/navigation.js';
 
 /**
  * Show a mobile-friendly connection form as an HTML overlay.
@@ -60,10 +62,10 @@ function showConnectionForm(savedServers: IServerInfo[]): Promise<IServerInfo | 
 			return input;
 		}
 
-		const nameInput = createField(localize('serverNameLabel', "Server Name"), 'my-dev-machine', 'pauls-macbook-pro-2');
-		const addressInput = createField(localize('addressLabel', "Host / Tailscale Name"), 'my-machine or 100.x.y.z', 'pauls-macbook-pro-2');
-		const portInput = createField(localize('portLabel', "Port"), '9888', '9888', 'number');
-		const tokenInput = createField(localize('tokenLabel', "Connection Token"), 'dev-token', 'dev-token', 'password');
+		const nameInput = createField(localize('serverNameLabel', "Server Name"), 'my-dev-machine', '');
+		const addressInput = createField(localize('addressLabel', "Host / Tailscale Name"), 'my-machine or 100.x.y.z', '');
+		const portInput = createField(localize('portLabel', "Port"), '9888', '', 'number');
+		const tokenInput = createField(localize('tokenLabel', "Connection Token"), 'dev-token', '', 'password');
 
 		const btnRow = append(overlay, $('div'));
 		btnRow.style.cssText = 'display:flex;gap:10px;margin-top:4px;';
@@ -123,12 +125,15 @@ class ConnectionContribution extends Disposable implements IWorkbenchContributio
 	) {
 		super();
 
-		// Auto-connect to last server on startup (only if URL already has remoteAuthority)
-		const params = new URLSearchParams(mainWindow.location.search);
-		if (params.has('remoteAuthority')) {
-			const lastServer = (this.connectionService as import('../../../services/connection/connectionService.js').ConnectionService).getLastServer();
-			if (lastServer) {
-				this.connectionService.connect(lastServer);
+		// Auto-connect to last server on startup (only if URL already has remoteAuthority
+		// and session info was not externally provided)
+		if (this.connectionService.sessionEditable) {
+			const params = new URLSearchParams(mainWindow.location.search);
+			if (params.has('remoteAuthority')) {
+				const lastServer = (this.connectionService as import('../../../services/connection/connectionService.js').ConnectionService).getLastServer();
+				if (lastServer) {
+					this.connectionService.connect(lastServer);
+				}
 			}
 		}
 	}
@@ -136,18 +141,22 @@ class ConnectionContribution extends Disposable implements IWorkbenchContributio
 
 registerWorkbenchContribution2(ConnectionContribution.ID, ConnectionContribution, WorkbenchPhase.AfterRestored);
 
-// Register "Connect to Server" action
+// Register "Connect to Server" action (only available when session is editable)
 registerAction2(class extends Action2 {
 	constructor() {
 		super({
 			id: 'mobile.connectToServer',
 			title: localize2('connectToServerAction', 'Connect to Server'),
 			f1: true,
+			precondition: MobileSessionEditableContext,
 		});
 	}
 
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const connectionService = accessor.get(IConnectionService);
+		if (!connectionService.sessionEditable) {
+			return;
+		}
 		const savedServers = connectionService.getSavedServers();
 
 		const server = await showConnectionForm(savedServers);
@@ -180,7 +189,7 @@ registerAction2(class extends Action2 {
 	run(accessor: ServicesAccessor): void {
 		const connectionService = accessor.get(IConnectionService);
 		connectionService.disconnect();
-		// Reload without remoteAuthority
-		mainWindow.location.search = '';
+		// Navigate back to the app shell (server selection page)
+		navigateToShell();
 	}
 });

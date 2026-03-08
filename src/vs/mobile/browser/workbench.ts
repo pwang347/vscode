@@ -33,7 +33,7 @@ import { ILifecycleService, LifecyclePhase, WillShutdownEvent } from '../../work
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { IHostService } from '../../workbench/services/host/browser/host.js';
-import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
+import { IDialogService, IFileDialogService } from '../../platform/dialogs/common/dialogs.js';
 import { IHoverService, WorkbenchHoverDelegate } from '../../platform/hover/browser/hover.js';
 import { setHoverDelegateFactory } from '../../base/browser/ui/hover/hoverDelegateFactory.js';
 import { setBaseLayerHoverDelegate } from '../../base/browser/ui/hover/hoverDelegate2.js';
@@ -53,27 +53,53 @@ import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/mar
 import { IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
 import { MobilePhase } from './parts/parts.js';
-import { IsMobileAppContext, MobileOrientationContext, MobilePhaseContext } from '../common/contextkeys.js';
+import { IsMobileAppContext, MobileOrientationContext, MobilePhaseContext, MobileSessionEditableContext } from '../common/contextkeys.js';
 import { ChatWidget } from '../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ChatAgentLocation } from '../../workbench/contrib/chat/common/constants.js';
-import { IChatModelReference, IChatService } from '../../workbench/contrib/chat/common/chatService/chatService.js';
+import { IChatModelReference, IChatService, convertLegacyChatSessionTiming } from '../../workbench/contrib/chat/common/chatService/chatService.js';
 import { SIDE_BAR_FOREGROUND, EDITOR_DRAG_AND_DROP_BACKGROUND } from '../../workbench/common/theme.js';
 import { editorBackground, inputBackground } from '../../platform/theme/common/colorRegistry.js';
 import { WelcomePage } from './parts/welcomePage.js';
 import { WorkspacePicker, ISavedWorkspace } from './parts/workspacePicker.js';
 import { TopBar } from './parts/topBar.js';
 import { Drawer, DrawerAction, IChatSessionItem } from './parts/drawer.js';
-import { IConnectionService } from '../services/connection/connectionService.js';
+import { IConnectionService, IServerInfo } from '../services/connection/connectionService.js';
+import { IHapticFeedbackService, HapticImpactStyle } from '../services/haptics/hapticFeedbackService.js';
+import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
 import { localize } from '../../nls.js';
 import { URI } from '../../base/common/uri.js';
 import { CancellationToken } from '../../base/common/cancellation.js';
 import { VIEWLET_ID as EXPLORER_VIEWLET_ID } from '../../workbench/contrib/files/common/files.js';
+import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
+import { isNativeMobileApp, listenMobileBackButton, minimizeApp, navigateToShell } from './navigation.js';
 
 
 //#region Workbench Options
 
+/**
+ * Session info provided externally by the caller (e.g. mobile app shell
+ * or web browser). When provided, the connection is pre-established and
+ * the user may or may not be able to change it depending on `editable`.
+ */
+export interface IMobileSessionInfo {
+	/** The server to connect to. */
+	readonly server: IServerInfo;
+	/** Whether the user can change the connection. Defaults to true. */
+	readonly editable: boolean;
+}
+
 export interface IMobileWorkbenchOptions {
 	extraClasses?: string[];
+	/**
+	 * Externally-provided session info. When set, the mobile workbench
+	 * skips the welcome page and uses this connection directly.
+	 * If `editable` is false, the connection UI is locked.
+	 */
+	sessionInfo?: IMobileSessionInfo;
+	/**
+	 * An element to remove once the workbench has rendered (e.g. a loading splash).
+	 */
+	loadingSplash?: HTMLElement;
 }
 
 //#endregion
@@ -189,6 +215,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 	// Phase-based UI components
 	private phase: MobilePhase = MobilePhase.Welcome;
+	private phaseKey: { set(v: string): void } | undefined;
 	private welcomePage: WelcomePage | undefined;
 	private workspacePicker: WorkspacePicker | undefined;
 	private topBar: TopBar | undefined;
@@ -203,10 +230,12 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private filesViewInitialized = false;
 	private _activeView: 'chat' | 'files' = 'chat';
 
-	// Editor overlay (shown when a file is opened from the explorer)
+	// Editor overlay (shown when a file is opened from the explorer or chat)
 	private editorOverlayContainer!: HTMLElement;
 	private editorPartInitialized = false;
 	private _editorVisible = false;
+	private _editorOpenedFrom: 'chat' | 'files' = 'files';
+	private _filesViewReady = false;
 
 	private _keyboardVisible = false;
 	private mainWindowFullscreen = false;
@@ -226,6 +255,9 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private viewDescriptorService!: IViewDescriptorService;
 	private commandService!: ICommandService;
 	private storageService!: IStorageService;
+	private fileDialogService!: IFileDialogService;
+	private quickInputService!: IQuickInputService;
+	private workspaceContextService!: IWorkspaceContextService;
 
 	//#endregion
 
@@ -294,6 +326,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 				const contextKeyService = accessor.get(IContextKeyService);
 				this.commandService = accessor.get(ICommandService);
 				this.storageService = storageService;
+				this.fileDialogService = accessor.get(IFileDialogService);
 
 				// Set code block renderer
 				markdownRendererService.setDefaultCodeBlockRenderer(instantiationService.createInstance(EditorMarkdownCodeBlockRenderer));
@@ -477,6 +510,9 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 		// Add Workbench to DOM
 		this.parent.appendChild(this.mainContainer);
+
+		// Remove the loading splash now that the workbench has rendered
+		this.options?.loadingSplash?.remove();
 	}
 
 	private setupTouchClickBridge(): void {
@@ -545,10 +581,23 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 	private createMobileLayout(instantiationService: IInstantiationService, contextKeyService: IContextKeyService): void {
 		const phaseKey = MobilePhaseContext.bindTo(contextKeyService);
+		this.phaseKey = phaseKey;
+		const sessionEditableKey = MobileSessionEditableContext.bindTo(contextKeyService);
 
-		// Determine initial phase from URL
+		// If external session info was provided, initialize the connection service
+		const sessionInfo = this.options?.sessionInfo;
+		if (sessionInfo) {
+			const connectionService = instantiationService.invokeFunction(a => a.get(IConnectionService));
+			connectionService.initializeFromExternal(sessionInfo.server, sessionInfo.editable);
+			sessionEditableKey.set(sessionInfo.editable);
+		}
+
+		// Determine initial phase from URL query params or server-injected config.
+		// When served from the code server's /chat endpoint, remoteAuthority is
+		// in the DOM meta tag rather than the URL query string.
 		const urlParams = new URLSearchParams(mainWindow.location.search);
-		const remoteAuthority = urlParams.get('remoteAuthority');
+		const configRemoteAuthority = this.getConfigRemoteAuthority();
+		const remoteAuthority = urlParams.get('remoteAuthority') || configRemoteAuthority;
 		const hasFolder = urlParams.has('folder') || urlParams.has('workspace');
 
 		if (remoteAuthority && hasFolder) {
@@ -567,6 +616,47 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 		// Show the correct phase
 		this.showPhase(this.phase, phaseKey);
+
+		// Android hardware back button handling via Capacitor App plugin.
+		// Priority: dismiss quick pick → close drawer → close editor →
+		// files→chat → chat→workspace picker → workspace picker→shell → minimize
+		this._register(listenMobileBackButton(() => {
+			// 1. Dismiss any open quick pick / input box
+			if (this.quickInputService.currentQuickInput) {
+				this.quickInputService.cancel();
+				return;
+			}
+
+			// 2. Close drawer if open
+			if (this.drawer?.isOpen) {
+				this.drawer.close();
+				return;
+			}
+
+			// 3. Phase-specific navigation
+			switch (this.phase) {
+				case MobilePhase.Chat:
+					if (this._editorVisible) {
+						// Editor visible → simulate top bar back (return to originating view)
+						this.topBar?.fireBack();
+					} else if (this._activeView === 'files') {
+						// Files → chat
+						this.showActiveView('chat');
+					} else {
+						// Chat → workspace picker
+						this.switchToWorkspacePicker();
+					}
+					break;
+				case MobilePhase.WorkspacePicker:
+					// Workspace picker → server list (shell)
+					navigateToShell();
+					break;
+				case MobilePhase.Welcome:
+					// Welcome page (server list) → minimize the app
+					minimizeApp();
+					break;
+			}
+		}));
 	}
 
 	private createWelcomePage(instantiationService: IInstantiationService): void {
@@ -587,27 +677,34 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private createWorkspacePicker(urlParams: URLSearchParams): void {
 		this.workspacePicker = this._register(new WorkspacePicker(this.mainContainer));
 
-		const remoteAuthority = urlParams.get('remoteAuthority');
-		if (remoteAuthority) {
-			this.workspacePicker.setServerName(remoteAuthority);
-		}
+		const remoteAuthority = urlParams.get('remoteAuthority') || this.getConfigRemoteAuthority();
 
 		// Populate saved workspaces
-		this.workspacePicker.updateWorkspaces(this.getSavedWorkspaces());
+		const savedWorkspaces = this.getSavedWorkspaces();
+		this.workspacePicker.updateWorkspaces(savedWorkspaces);
 
 		this._register(this.workspacePicker.onDidSelectWorkspace(path => {
 			this.openWorkspace(path, remoteAuthority ?? '');
 		}));
-		this._register(this.workspacePicker.onDidRequestOpenFolder(() => {
-			this.commandService.executeCommand('workbench.action.files.openFolder');
+		this._register(this.workspacePicker.onDidRequestOpenFolder(async () => {
+			const result = await this.fileDialogService.showOpenDialog({
+				canSelectFiles: false,
+				canSelectFolders: true,
+				canSelectMany: false,
+				title: localize('addFolder', "Add Folder")
+			});
+			if (result && result.length > 0) {
+				this.saveWorkspace(result[0].path);
+				this.workspacePicker?.updateWorkspaces(this.getSavedWorkspaces());
+			}
+		}));
+		this._register(this.workspacePicker.onDidAddWorkspace(path => {
+			this.saveWorkspace(path);
+			this.workspacePicker?.updateWorkspaces(this.getSavedWorkspaces());
 		}));
 		this._register(this.workspacePicker.onDidRemoveWorkspace(path => {
 			this.removeWorkspace(path);
 			this.workspacePicker?.updateWorkspaces(this.getSavedWorkspaces());
-		}));
-		this._register(this.workspacePicker.onDidPressBack(() => {
-			// Disconnect and go back to welcome
-			mainWindow.location.search = '';
 		}));
 	}
 
@@ -623,12 +720,12 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		this.filesViewContainer = append(this.mainContainer, $('.mobile-active-view.mobile-files-view'));
 		this.filesViewContainer.style.display = 'none';
 
-		// Editor overlay (hidden by default, shown when a file is opened from explorer)
+		// Editor overlay (hidden by default, shown when a file is opened from explorer or chat)
 		this.editorOverlayContainer = append(this.mainContainer, $('.mobile-active-view.mobile-editor-overlay'));
 		this.editorOverlayContainer.style.display = 'none';
 
 		// Create chat widget when in chat phase
-		const remoteAuthority = urlParams.get('remoteAuthority');
+		const remoteAuthority = urlParams.get('remoteAuthority') || this.getConfigRemoteAuthority();
 		if (remoteAuthority && (urlParams.has('folder') || urlParams.has('workspace'))) {
 			this.createChatWidget(instantiationService, chatView);
 		}
@@ -642,15 +739,25 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		}));
 
 		// Wire up top bar back button — navigate back through the stack:
-		// editor → files → chat
+		// editor → originating view (chat or files) → chat
 		this._register(this.topBar.onDidPressBack(() => {
 			if (this._editorVisible) {
-				// Close editor, return to files
+				// Close editor, return to the view that opened it
+				const returnTo = this._editorOpenedFrom;
 				this.hideEditorOverlay();
-				this.filesViewContainer.style.display = '';
-				this.topBar?.setTitle(localize('files', "Files"));
-				this.topBar?.setBackVisible(true);
-				this.layoutFilesView();
+				if (returnTo === 'chat') {
+					// Restore chat directly — _activeView is already 'chat'
+					// so showActiveView would early-return
+					this.chatViewContainer.style.display = '';
+					this.topBar?.setTitle(this.chatWidget?.viewModel?.model.title || localize('newChat', "New Chat"));
+					this.topBar?.setBackVisible(false);
+					this.layoutChatWidget();
+				} else {
+					this.filesViewContainer.style.display = '';
+					this.topBar?.setTitle(this.getFilesViewTitle());
+					this.topBar?.setBackVisible(true);
+					this.layoutFilesView();
+				}
 			} else {
 				this.showActiveView('chat');
 			}
@@ -670,21 +777,26 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		}
 
 		// Wire up footer navigation — change server / workspace
+		// Enable if session is editable, or if running inside the native
+		// mobile app (where tapping the connection info returns to the
+		// native shell's server list regardless of editability).
+		const sessionEditable = this.options?.sessionInfo?.editable ?? true;
+		const canNavigateToShell = sessionEditable || isNativeMobileApp();
 		this._register(this.drawer.onDidPressConnection(() => {
-			// Go back to welcome page (server selection) by clearing remoteAuthority
-			mainWindow.location.search = '';
+			if (!canNavigateToShell) {
+				return;
+			}
+			// Go back to the app shell (server selection page)
+			navigateToShell();
 		}));
 		this._register(this.drawer.onDidPressWorkspace(() => {
-			// Go back to workspace picker by removing folder param
-			const params = new URLSearchParams(mainWindow.location.search);
-			params.delete('folder');
-			params.delete('workspace');
-			mainWindow.location.search = params.toString();
+			// Switch to workspace picker in-place (no reload)
+			this.switchToWorkspacePicker();
 		}));
 
 		// Update drawer footer with connection + workspace info
 		if (remoteAuthority) {
-			this.drawer.updateConnectionInfo(remoteAuthority, 'connected');
+			this.drawer.updateConnectionInfo(remoteAuthority, 'connected', canNavigateToShell);
 		}
 		const folder = urlParams.get('folder');
 		if (folder) {
@@ -720,6 +832,37 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		}
 	}
 
+	/**
+	 * Switch back to the workspace picker without a page reload.
+	 * Hides the chat phase UI and shows the picker, then updates the
+	 * URL so a manual refresh lands on the picker too.
+	 */
+	private switchToWorkspacePicker(): void {
+		// Close the drawer if open
+		this.drawer?.close();
+
+		// Also hide files/editor overlays if visible
+		if (this.filesViewContainer) {
+			this.filesViewContainer.style.display = 'none';
+		}
+		if (this.editorOverlayContainer) {
+			this.editorOverlayContainer.style.display = 'none';
+		}
+
+		// Refresh the workspace list before showing
+		this.workspacePicker?.updateWorkspaces(this.getSavedWorkspaces());
+
+		// Switch phase
+		this.showPhase(MobilePhase.WorkspacePicker, this.phaseKey);
+
+		// Update URL without reloading so a manual refresh lands here
+		const params = new URLSearchParams(mainWindow.location.search);
+		params.delete('folder');
+		params.delete('workspace');
+		const newUrl = `${mainWindow.location.pathname}?${params.toString()}`;
+		mainWindow.history.pushState(null, '', newUrl);
+	}
+
 	//#endregion
 
 	//#region Workspace Management
@@ -736,10 +879,6 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			} catch {
 				// ignore
 			}
-		}
-		// Default test workspace for development
-		if (!workspaces.some(w => w.path === '/Users/paulwang/Desktop/tmp/vscode')) {
-			workspaces.push({ path: '/Users/paulwang/Desktop/tmp/vscode' });
 		}
 		return workspaces;
 	}
@@ -759,6 +898,19 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 	private openWorkspace(path: string, remoteAuthority: string): void {
 		this.saveWorkspace(path);
+
+		// If the selected workspace is already the current one, just switch
+		// back to the chat phase without reloading.
+		const currentFolder = new URLSearchParams(mainWindow.location.search).get('folder');
+		if (currentFolder) {
+			// The URL folder may be a full vscode-remote:// URI — extract the path
+			const currentPath = currentFolder.replace(/^vscode-remote:\/\/[^/]*/, '');
+			if (currentPath === path) {
+				this.showPhase(MobilePhase.Chat, this.phaseKey);
+				return;
+			}
+		}
+
 		const params = new URLSearchParams(mainWindow.location.search);
 		// Use full vscode-remote URI so the workspace resolver and validator work correctly
 		const folderUri = remoteAuthority && path.startsWith('/')
@@ -767,6 +919,25 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		params.set('folder', folderUri);
 		params.set('remoteAuthority', remoteAuthority);
 		mainWindow.location.search = params.toString();
+	}
+
+	/**
+	 * Read the remote authority from the server-injected workbench configuration.
+	 * When the mobile workbench is served from the code server's /chat endpoint,
+	 * the remote authority is embedded in the DOM meta tag rather than the URL.
+	 */
+	private getConfigRemoteAuthority(): string | undefined {
+		// eslint-disable-next-line no-restricted-syntax
+		const configData = mainWindow.document.getElementById('vscode-workbench-web-configuration')?.getAttribute('data-settings');
+		if (configData) {
+			try {
+				const config = JSON.parse(configData.replace(/&quot;/g, '"'));
+				return config.remoteAuthority || undefined;
+			} catch {
+				return undefined;
+			}
+		}
+		return undefined;
 	}
 
 	//#endregion
@@ -799,10 +970,12 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			return;
 		}
 		const details = await this.chatService.getLocalSessionHistory();
-		const items: IChatSessionItem[] = details.map(d => ({
-			sessionId: d.sessionResource.toString(),
-			title: d.title,
-		}));
+		const items: IChatSessionItem[] = details
+			.filter(d => convertLegacyChatSessionTiming(d.timing).lastRequestStarted !== undefined)
+			.map(d => ({
+				sessionId: d.sessionResource.toString(),
+				title: d.title,
+			})).reverse();
 		this.drawer.updateSessions(items);
 	}
 
@@ -822,6 +995,11 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 	//#region Active View Switching
 
+	private getFilesViewTitle(): string {
+		const folders = this.workspaceContextService.getWorkspace().folders;
+		return folders.length > 0 ? folders[0].name : localize('files', "Files");
+	}
+
 	private showActiveView(view: 'chat' | 'files'): void {
 		if (this._activeView === view) {
 			return;
@@ -838,7 +1016,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		} else {
 			this.chatViewContainer.style.display = 'none';
 			this.filesViewContainer.style.display = '';
-			this.topBar?.setTitle(localize('files', "Files"));
+			this.topBar?.setTitle(this.getFilesViewTitle());
 			this.topBar?.setBackVisible(true);
 			this.layoutFilesView();
 		}
@@ -849,8 +1027,10 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			return;
 		}
 		this._editorVisible = true;
+		this._editorOpenedFrom = this._activeView;
 		this.initEditorPart();
 		this.editorOverlayContainer.style.display = '';
+		this.chatViewContainer.style.display = 'none';
 		this.filesViewContainer.style.display = 'none';
 		const editorName = this.editorService.activeEditor?.getName() ?? localize('editor', "Editor");
 		this.topBar?.setTitle(editorName);
@@ -865,7 +1045,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		this._editorVisible = false;
 		this.editorOverlayContainer.style.display = 'none';
 		// Close all editors when leaving the overlay
-		this.editorService.closeAllEditors();
+		this.editorGroupService.activeGroup.closeAllEditors();
 	}
 
 	private initEditorPart(): void {
@@ -929,8 +1109,20 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			this.filesViewContainer.appendChild(partContainer);
 
 			sidebarPart.create(partContainer);
+
+			// Pre-initialize the editor part so file clicks can open editors
+			// immediately. The EditorPart needs its DOM created before
+			// editorService.openEditor() can render an editor widget.
+			this.initEditorPart();
+
 			await this.paneCompositeService.openPaneComposite(EXPLORER_VIEWLET_ID, ViewContainerLocation.Sidebar, true);
 			this.layoutFilesView();
+
+			// Close any auto-restored editors (e.g. welcome) and mark ready.
+			// The _filesViewReady flag ensures the editor overlay stays hidden
+			// until after initialization completes.
+			await this.editorGroupService.activeGroup.closeAllEditors();
+			this._filesViewReady = true;
 		} catch (err) {
 			console.error('[mobile] initFilesView error:', err);
 		}
@@ -994,6 +1186,19 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			chatWidget.render(container);
 			chatWidget.setVisible(true);
 			this.chatWidget = chatWidget;
+
+			// Haptic feedback + "sending" state on send — fires immediately when
+			// the user taps send, before the async submission pipeline.
+			const hapticService = instantiationService.invokeFunction(accessor => {
+				try { return accessor.get(IHapticFeedbackService); } catch { return undefined; }
+			});
+			this._register(chatWidget.onDidAcceptInput(() => {
+				container.classList.add('mobile-sending');
+				hapticService?.impact(HapticImpactStyle.Light);
+			}));
+			this._register(chatWidget.onDidSubmitAgent(() => {
+				container.classList.remove('mobile-sending');
+			}));
 
 			this.chatService = instantiationService.invokeFunction(accessor => accessor.get(IChatService));
 			const modelRef = this.chatService.startNewLocalSession(ChatAgentLocation.Chat);
@@ -1061,6 +1266,8 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		this.editorService = accessor.get(IEditorService);
 		this.paneCompositeService = accessor.get(IPaneCompositePartService);
 		this.viewDescriptorService = accessor.get(IViewDescriptorService);
+		this.quickInputService = accessor.get(IQuickInputService);
+		this.workspaceContextService = accessor.get(IWorkspaceContextService);
 
 		// Force ViewsService instantiation so it populates the
 		// PaneCompositeRegistry with built-in view containers (explorer, etc.).
@@ -1068,9 +1275,12 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		// construction which then registers all view container descriptors.
 		accessor.get(IViewsService);
 
-		// Handle editor opens — show editor overlay on top of the files view
+		// Handle editor opens — show editor overlay on top of the current view.
+		// initEditorPart() is called lazily inside showEditorOverlay() so the
+		// editor part DOM is created on first use, avoiding auto-restored
+		// welcome/walkthrough editors at startup.
 		this._register(this.editorService.onDidActiveEditorChange(() => {
-			if (this.editorService.activeEditor && this._activeView === 'files') {
+			if (this.editorService.activeEditor && (this._activeView === 'files' ? this._filesViewReady : true)) {
 				this.showEditorOverlay();
 			}
 		}));

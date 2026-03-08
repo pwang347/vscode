@@ -35,7 +35,7 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { IDragAndDropData, DataTransfers } from '../../../../../base/browser/dnd.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { NativeDragAndDropData, ExternalElementsDragAndDropData, ElementsDragAndDropData, ListViewTargetSector } from '../../../../../base/browser/ui/list/listView.js';
-import { isMacintosh, isWeb } from '../../../../../base/common/platform.js';
+import { isMacintosh, isMobile, isWeb } from '../../../../../base/common/platform.js';
 import { IDialogService, getFileNamesMessage } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspaceEditingService } from '../../../../services/workspaces/common/workspaceEditing.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -77,7 +77,7 @@ import { asCssVariable } from '../../../../../platform/theme/common/colorUtils.j
 
 export class ExplorerDelegate implements IListVirtualDelegate<ExplorerItem> {
 
-	static readonly ITEM_HEIGHT = 22;
+	static readonly ITEM_HEIGHT = isMobile ? 44 : 22;
 
 	getHeight(element: ExplorerItem): number {
 		return ExplorerDelegate.ITEM_HEIGHT;

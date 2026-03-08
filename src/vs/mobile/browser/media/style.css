@@ -205,7 +205,7 @@
 	display: flex;
 	flex-direction: column;
 	height: 100%;
-	background: var(--vscode-editor-background);
+	background: var(--vscode-sideBar-background);
 	color: var(--vscode-editor-foreground);
 	overflow-y: auto;
 	-webkit-overflow-scrolling: touch;
@@ -214,11 +214,11 @@
 .mobile-workbench .workspace-picker-topbar {
 	display: flex;
 	align-items: center;
-	height: 48px;
-	min-height: 48px;
+	height: 44px;
+	min-height: 44px;
 	padding: 0 8px;
 	gap: 8px;
-	border-bottom: 1px solid var(--vscode-panel-border, rgba(255,255,255,0.06));
+	border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border, var(--vscode-panel-border, transparent));
 	flex-shrink: 0;
 }
 
@@ -226,14 +226,14 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 36px;
-	height: 36px;
+	width: 28px;
+	height: 28px;
 	border: none;
-	border-radius: 10px;
+	border-radius: 6px;
 	background: transparent;
 	color: var(--vscode-editor-foreground);
 	cursor: pointer;
-	font-size: 18px;
+	font-size: 16px;
 	-webkit-tap-highlight-color: transparent;
 }
 
@@ -242,71 +242,171 @@
 }
 
 .mobile-workbench .workspace-picker-server {
-	font-size: 15px;
+	font-size: 13px;
 	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	color: var(--vscode-titleBar-activeForeground, var(--vscode-editor-foreground));
 }
 
 .mobile-workbench .workspace-picker-title {
-	margin: 28px 20px 6px;
-	font-size: 26px;
-	font-weight: 700;
-	letter-spacing: -0.3px;
+	margin: 24px 16px 12px;
+	font-size: 20px;
+	font-weight: 600;
+	letter-spacing: -0.2px;
+}
+
+.mobile-workbench .workspace-picker-fab {
+	position: fixed;
+	bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+	right: 20px;
+	width: 52px;
+	height: 52px;
+	border-radius: 16px;
+	border: none;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	font-size: 22px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+	-webkit-tap-highlight-color: transparent;
+	transition: background 0.15s ease;
+	z-index: 10;
+}
+
+.mobile-workbench .workspace-picker-fab .codicon {
+	color: var(--vscode-button-foreground);
+}
+
+.mobile-workbench .workspace-picker-fab:active {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.mobile-workbench .workspace-picker-add-row {
+	display: flex;
+	gap: 8px;
+	padding: 0 16px;
+	margin-bottom: 12px;
+}
+
+.mobile-workbench .workspace-picker-add-input {
+	flex: 1;
+	padding: 8px 12px;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 8px;
+	color: var(--vscode-input-foreground, var(--vscode-editor-foreground));
+	font-size: 13px;
+	outline: none;
+	transition: border-color 0.15s ease;
+	font-family: inherit;
+}
+
+.mobile-workbench .workspace-picker-add-input::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.mobile-workbench .workspace-picker-add-input:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.mobile-workbench .workspace-picker-add-btn {
+	padding: 8px 16px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: none;
+	border-radius: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+	transition: background 0.15s ease;
+	flex-shrink: 0;
+}
+
+.mobile-workbench .workspace-picker-add-btn:active {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.mobile-workbench .workspace-picker-search {
+	padding: 0 16px;
+	margin-bottom: 12px;
+}
+
+.mobile-workbench .workspace-picker-search-input {
+	width: 100%;
+	padding: 8px 12px;
+	background: var(--vscode-input-background);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 8px;
+	color: var(--vscode-input-foreground, var(--vscode-editor-foreground));
+	font-size: 13px;
+	outline: none;
+	transition: border-color 0.15s ease;
+	font-family: inherit;
+}
+
+.mobile-workbench .workspace-picker-search-input::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.mobile-workbench .workspace-picker-search-input:focus {
+	border-color: var(--vscode-focusBorder);
 }
 
 .mobile-workbench .workspace-picker-section-label {
-	margin: 0 20px 12px;
-	font-size: 13px;
+	margin: 0 16px 8px;
+	font-size: 11px;
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
-	opacity: 0.45;
+	color: var(--vscode-descriptionForeground);
 }
 
 .mobile-workbench .workspace-picker-list {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
-	padding: 0 20px;
-	margin-bottom: 20px;
+	gap: 6px;
+	padding: 0 16px;
+	margin-bottom: 16px;
 }
 
 .mobile-workbench .workspace-picker-item {
 	display: flex;
 	align-items: center;
-	gap: 14px;
+	gap: 12px;
 	width: 100%;
-	padding: 16px 18px;
-	background: var(--vscode-input-background, #2a2a2a);
-	border: 1px solid var(--vscode-input-border, rgba(255,255,255,0.08));
-	border-radius: 14px;
+	padding: 12px;
+	background: var(--vscode-editor-background);
+	border: 1px solid var(--vscode-widget-border, var(--vscode-sideBarSectionHeader-border, transparent));
+	border-radius: 8px;
 	color: var(--vscode-editor-foreground);
 	cursor: pointer;
 	text-align: left;
-	font-size: 15px;
+	font-size: 14px;
 	-webkit-tap-highlight-color: transparent;
-	transition: transform 0.1s, background 0.1s;
+	transition: background 0.15s ease;
 }
 
 .mobile-workbench .workspace-picker-item:active {
-	background: var(--vscode-list-hoverBackground, #2a2d2e);
-	transform: scale(0.98);
+	background: var(--vscode-list-hoverBackground);
 }
 
 .mobile-workbench .workspace-picker-item .ws-icon {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 40px;
-	height: 40px;
-	border-radius: 10px;
-	background: var(--vscode-button-background, #007acc);
-	color: var(--vscode-button-foreground, #fff);
-	font-size: 18px;
+	width: 32px;
+	height: 32px;
+	border-radius: 6px;
+	background: var(--vscode-sideBar-background);
+	color: var(--vscode-descriptionForeground);
+	font-size: 16px;
 	flex-shrink: 0;
-	opacity: 0.85;
 }
 
 .mobile-workbench .workspace-picker-item .ws-info {
@@ -314,61 +414,76 @@
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 1px;
 }
 
 .mobile-workbench .workspace-picker-item .ws-label {
-	font-weight: 600;
-	font-size: 16px;
+	font-weight: 500;
+	font-size: 14px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
 .mobile-workbench .workspace-picker-item .ws-path {
-	font-size: 13px;
-	opacity: 0.45;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.mobile-workbench .workspace-picker-item .ws-chevron {
-	opacity: 0.3;
-	flex-shrink: 0;
+.mobile-workbench .workspace-picker-item .ws-remove {
+	background: none;
+	border: none;
+	color: var(--vscode-disabledForeground);
 	font-size: 16px;
+	cursor: pointer;
+	padding: 6px;
+	border-radius: 4px;
+	transition: background 0.15s ease;
+	line-height: 1;
+	flex-shrink: 0;
+	margin-left: 4px;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mobile-workbench .workspace-picker-item .ws-remove:active {
+	background: var(--vscode-list-hoverBackground);
 }
 
 .mobile-workbench .workspace-picker-item.loading {
-	opacity: 0.7;
+	opacity: 0.6;
 	pointer-events: none;
 }
 
-.mobile-workbench .workspace-picker-open {
+.mobile-workbench .workspace-picker-loading-overlay {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: var(--vscode-editor-background, #ffffff);
+	z-index: 10;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	gap: 8px;
-	margin: 4px 20px 0;
-	padding: 16px;
-	background: var(--vscode-button-background, #007acc);
-	color: var(--vscode-button-foreground, #fff);
-	border: none;
-	border-radius: 14px;
-	font-size: 16px;
-	font-weight: 600;
-	cursor: pointer;
-	-webkit-tap-highlight-color: transparent;
-	transition: transform 0.1s;
+	flex-direction: column;
+	gap: 12px;
 }
 
-.mobile-workbench .workspace-picker-open .codicon {
-	color: var(--vscode-button-foreground, #fff);
+.mobile-workbench .workspace-picker-loading-overlay .spinner {
+	width: 28px;
+	height: 28px;
+	border: 2px solid var(--vscode-panel-border, #cecece);
+	border-top-color: var(--vscode-textLink-foreground, #007acc);
+	border-radius: 50%;
+	animation: mobile-spin 0.8s linear infinite;
 }
 
-.mobile-workbench .workspace-picker-open:active {
-	background: var(--vscode-button-hoverBackground, #005a9e);
-	transform: scale(0.98);
+.mobile-workbench .workspace-picker-loading-overlay p {
+	font-size: 13px;
+	color: var(--vscode-descriptionForeground, #616161);
 }
 
 /* =====================================
@@ -674,6 +789,25 @@
 	display: none !important;
 }
 
+/* Hide the glyph margin (debug breakpoint gutter) in mobile editors —
+ * force width to 0 and hide all related elements since the editor layout
+ * may still reserve space via inline styles even with glyphMargin:false */
+.mobile-workbench .mobile-editor-overlay .glyph-margin {
+	width: 0 !important;
+	display: none !important;
+}
+.mobile-workbench .mobile-editor-overlay .glyph-margin-widgets {
+	width: 0 !important;
+	display: none !important;
+}
+/* Shift line numbers and decorations to the left edge */
+.mobile-workbench .mobile-editor-overlay .margin-view-overlays {
+	left: 0 !important;
+}
+.mobile-workbench .mobile-editor-overlay .margin-view-overlays .line-numbers {
+	left: 0 !important;
+}
+
 .mobile-workbench .mobile-chat-view {
 	display: flex;
 	flex-direction: column;
@@ -740,6 +874,81 @@
 	min-height: 24px;
 }
 
+/* ---- Chat send button press feedback ---- */
+
+.mobile-workbench .chat-execute-toolbar .action-item .action-label {
+	transition: opacity 0.1s ease, transform 0.1s ease;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mobile-workbench .chat-execute-toolbar .action-item .action-label:active {
+	opacity: 0.6;
+	transform: scale(0.85);
+}
+
+/* ---- Sending state ---- */
+
+.mobile-workbench .mobile-chat-view.mobile-sending .interactive-input-part {
+	pointer-events: none;
+}
+
+.mobile-workbench .mobile-chat-view.mobile-sending .chat-input-container {
+	opacity: 0.5;
+	transition: opacity 0.15s ease;
+}
+
+.mobile-workbench .mobile-chat-view.mobile-sending .chat-execute-toolbar .action-item .action-label {
+	animation: mobile-send-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes mobile-send-pulse {
+	0%, 100% { opacity: 0.4; }
+	50% { opacity: 0.7; }
+}
+
+/* ---- Chat input toolbar font sizes ---- */
+
+/* Primary toolbar picker labels (Agent, Model, etc.) */
+.mobile-workbench .interactive-session .chat-input-toolbar .chat-input-picker-item .action-label,
+.mobile-workbench .interactive-session .chat-input-toolbar .chat-sessionPicker-item .action-label {
+	font-size: 14px;
+	height: 20px;
+}
+
+.mobile-workbench .interactive-session .chat-input-toolbar .chat-input-picker-item .action-label .codicon,
+.mobile-workbench .interactive-session .chat-input-toolbar .chat-sessionPicker-item .action-label .codicon {
+	font-size: 14px;
+}
+
+.mobile-workbench .interactive-session .chat-input-toolbar .chat-input-picker-item .action-label .codicon-chevron-down,
+.mobile-workbench .interactive-session .chat-input-toolbar .chat-sessionPicker-item .action-label .codicon-chevron-down {
+	font-size: 12px;
+}
+
+/* Add-context button icon */
+.mobile-workbench .interactive-session .chat-input-toolbar .action-item:has(.codicon-add) .codicon-add {
+	font-size: 16px;
+}
+
+/* Secondary toolbar picker labels (Local agent type, Default approvals, etc.) */
+.mobile-workbench .interactive-session .chat-secondary-toolbar .chat-input-picker-item .action-label {
+	font-size: 14px;
+	height: 20px;
+}
+
+.mobile-workbench .interactive-session .chat-secondary-toolbar .chat-input-picker-item .action-label .codicon {
+	font-size: 14px;
+}
+
+.mobile-workbench .interactive-session .chat-secondary-toolbar .chat-input-picker-item .action-label .codicon-chevron-down {
+	font-size: 12px;
+}
+
+/* Standalone toolbar action icons */
+.mobile-workbench .interactive-session .chat-input-toolbars .monaco-action-bar .action-item .codicon {
+	font-size: 16px;
+}
+
 /* =====================================
 	LANDSCAPE
 	===================================== */
@@ -782,34 +991,214 @@
 	DIALOGS & NOTIFICATIONS
 	===================================== */
 
-/* Dialog boxes overflow on mobile due to min-width: 500px / 350px */
+/* ---- Modal Dialog — mobile-optimized ---- */
+
+.mobile-workbench .monaco-dialog-modal-block.dimmed {
+	background: rgba(0, 0, 0, 0.45);
+}
+
+/* Dialog container — fit mobile viewport, consistent with app design */
 .mobile-workbench .monaco-dialog-box {
 	min-width: unset;
 	width: calc(100vw - 32px);
-	max-width: 500px;
+	max-width: 400px;
 	box-sizing: border-box;
+	padding: 20px 20px 16px;
+	border-radius: 14px;
 }
 
 .mobile-workbench .monaco-dialog-box.align-vertical {
 	min-width: unset;
 }
 
-/* Buttons may need to wrap on narrow screens */
+/*
+ * Message row — keep the default horizontal layout (icon + text side by side).
+ * This matches the established left-aligned design language of the mobile app
+ * and avoids the "floating icon" problem of a forced vertical stack.
+ */
+.mobile-workbench .monaco-dialog-box .dialog-message-row {
+	padding: 0 4px;
+}
+
+/* Icon — sized down to match the text flow instead of dominating */
+.mobile-workbench .monaco-dialog-box .dialog-message-row > .dialog-icon.codicon {
+	flex: 0 0 32px;
+	height: 32px;
+	font-size: 28px;
+	align-self: flex-start;
+	margin-top: 2px;
+}
+
+/* In vertical layout, keep icon proportional */
+.mobile-workbench .monaco-dialog-box.align-vertical .dialog-message-row > .dialog-icon.codicon {
+	flex: 0 0 40px;
+	height: 40px;
+	font-size: 36px;
+}
+
+/* Message container — left-aligned to match app design */
+.mobile-workbench .monaco-dialog-box:not(.align-vertical) .dialog-message-row .dialog-message-container {
+	padding-left: 14px;
+}
+
+/* Message title */
+.mobile-workbench .monaco-dialog-box .dialog-message-row .dialog-message-container .dialog-message {
+	font-size: 16px;
+	font-weight: 600;
+	line-height: 1.35;
+	min-height: auto;
+	margin-bottom: 6px;
+}
+
+/* Message detail text */
+.mobile-workbench .monaco-dialog-box .dialog-message-row .dialog-message-container .dialog-message-detail {
+	font-size: 14px;
+	line-height: 1.45;
+	opacity: 0.8;
+}
+
+/* Checkbox within dialog */
+.mobile-workbench .monaco-dialog-box .dialog-checkbox-row {
+	padding: 12px 0 0;
+}
+
+.mobile-workbench .monaco-dialog-box .dialog-checkbox-row .monaco-custom-toggle.monaco-checkbox {
+	width: 20px !important;
+	height: 20px !important;
+	font-size: 16px !important;
+	display: flex !important;
+	align-items: center;
+	justify-content: center;
+}
+
+.mobile-workbench .monaco-dialog-box .dialog-checkbox-row .dialog-checkbox-message {
+	font-size: 14px;
+	line-height: 1.4;
+}
+
+/* Input fields within dialog */
+.mobile-workbench .monaco-dialog-box .dialog-message-input .monaco-inputbox {
+	font-size: 16px; /* Prevents iOS zoom on focus */
+}
+
+.mobile-workbench .monaco-dialog-box .dialog-message-input .monaco-inputbox input {
+	font-size: 16px !important;
+	padding: 8px 12px;
+}
+
+/* ---- Buttons ---- */
+
+.mobile-workbench .monaco-dialog-box > .dialog-buttons-row {
+	padding: 16px 4px 4px;
+}
+
+/*
+ * Buttons container — horizontal by default so 2-button confirmations
+ * (e.g. "Cancel" / "Enable") sit side-by-side like native mobile alerts.
+ * flex-wrap handles overflow for 3+ buttons gracefully.
+ */
 .mobile-workbench .monaco-dialog-box:not(.align-vertical) > .dialog-buttons-row > .dialog-buttons {
 	margin-left: 0;
 	flex-wrap: wrap;
 	justify-content: flex-end;
+	gap: 8px;
 }
 
-/* Notification toasts should not exceed viewport */
+/* Each button — mobile-friendly sizing and rounded corners */
+.mobile-workbench .monaco-dialog-box > .dialog-buttons-row > .dialog-buttons > .monaco-button,
+.mobile-workbench .monaco-dialog-box > .dialog-buttons-row > .dialog-buttons > .monaco-button-dropdown {
+	margin: 0;
+}
+
+.mobile-workbench .monaco-dialog-box > .dialog-buttons-row > .dialog-buttons .monaco-text-button {
+	padding: 10px 20px;
+	font-size: 15px;
+	line-height: 1.3;
+	min-height: 42px;
+	border-radius: 10px;
+}
+
+/* In vertical layout, buttons stack full-width */
+.mobile-workbench .monaco-dialog-box.align-vertical > .dialog-buttons-row > .dialog-buttons {
+	gap: 8px;
+}
+
+.mobile-workbench .monaco-dialog-box.align-vertical > .dialog-buttons-row > .dialog-buttons > .monaco-button,
+.mobile-workbench .monaco-dialog-box.align-vertical > .dialog-buttons-row > .dialog-buttons > .monaco-button-dropdown {
+	margin: 0;
+}
+
+/* Dropdown buttons in dialogs */
+.mobile-workbench .monaco-dialog-box > .dialog-buttons-row > .dialog-buttons .monaco-dropdown-button {
+	min-height: 42px;
+	padding: 8px 10px;
+}
+
+/* Toolbar (close button) — larger tap target */
+.mobile-workbench .monaco-dialog-box .dialog-toolbar-row {
+	height: auto;
+	padding-bottom: 0;
+}
+
+.mobile-workbench .monaco-dialog-box .dialog-toolbar-row .action-item .action-label {
+	width: 28px;
+	height: 28px;
+	line-height: 28px;
+	font-size: 14px;
+}
+
+/* Footer */
+.mobile-workbench .monaco-dialog-box .dialog-footer-row {
+	margin-top: 12px;
+	font-size: 13px;
+}
+
+/* ---- Notification toasts — mobile-optimized ---- */
+
 .mobile-workbench .notifications-toasts {
 	max-width: calc(100vw - 16px);
 }
 
-/* Quick pick should use full width on mobile */
-.mobile-workbench .quick-input-widget {
-	width: calc(100vw - 16px) !important;
-	left: 8px !important;
-	max-width: none;
-	border-radius: var(--vscode-cornerRadius-large);
+/*
+ * Notification icon — match the message text line-height exactly.
+ * Default is height:22px / font-size:18px / line-height not set.
+ * Our message text uses font-size:14px / line-height:20px.
+ * Set explicit line-height on the icon to match.
+ */
+.mobile-workbench .notifications-list-container .notification-list-item .notification-list-item-icon {
+	height: 20px;
+	line-height: 20px;
+	font-size: 16px;
+	align-self: center;
 }
+
+/* Notification message text */
+.mobile-workbench .notifications-list-container .notification-list-item .notification-list-item-message {
+	font-size: 14px;
+	line-height: 20px;
+}
+
+/* Buttons container — wrap and center when stacked vertically */
+.mobile-workbench .notifications-list-container .notification-list-item .notification-list-item-buttons-container {
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+/*
+ * Notification action buttons — larger tap targets.
+ *
+ * Focus outline fix: The platform rule on .monaco-button sets
+ * outline-offset: 2px !important (5-class specificity). The outline
+ * gets clipped by overflow:hidden on .monaco-list-row. We can't
+ * remove that overflow. Instead we use a HIGHER specificity selector
+ * (6 classes) with !important to force an inset outline.
+ */
+.mobile-workbench .notifications-list-container .notification-list-item .notification-list-item-buttons-container .monaco-button.monaco-text-button {
+	padding: 8px 14px;
+	font-size: 13px;
+	min-height: 32px;
+	border-radius: 8px;
+	outline-offset: -2px !important;
+}
+
+/* Quick pick is now styled via mobileQuickInput.css as a bottom sheet */

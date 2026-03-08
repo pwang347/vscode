@@ -20,10 +20,10 @@ import { IWorkspaceFolder } from '../../../../platform/workspace/common/workspac
 import { EditorInput } from '../../../common/editor/editorInput.js';
 import { IEditableData } from '../../../common/views.js';
 import { ITerminalStatusList } from './terminalStatusList.js';
-import { XtermTerminal } from './xterm/xtermTerminal.js';
+import type { XtermTerminal } from './xterm/xtermTerminal.js';
 import { IRegisterContributedProfileArgs, IRemoteTerminalAttachTarget, IStartExtensionTerminalRequest, ITerminalConfiguration, ITerminalFont, ITerminalProcessExtHostProxy, ITerminalProcessInfo } from '../common/terminal.js';
 import type { IMarker, ITheme, Terminal as RawXtermTerminal, IBufferRange, IMarker as IXtermMarker } from '@xterm/xterm';
-import { ScrollPosition } from './xterm/markNavigationAddon.js';
+import type { ScrollPosition } from './xterm/markNavigationAddon.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { GroupIdentifier } from '../../../common/editor.js';
 import { ACTIVE_GROUP_TYPE, AUX_WINDOW_GROUP_TYPE, SIDE_GROUP_TYPE } from '../../../services/editor/common/editorService.js';

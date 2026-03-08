@@ -12,7 +12,7 @@ import { ConfigurationTarget, IConfigurationService } from '../../../../../../..
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { ITerminalChatService } from '../../../../../terminal/browser/terminal.js';
 import { IStorageService, StorageScope } from '../../../../../../../platform/storage/common/storage.js';
-import { TerminalToolConfirmationStorageKeys } from '../../../../../chat/browser/widget/chatContentParts/toolInvocationParts/chatTerminalToolConfirmationSubPart.js';
+import { TerminalToolConfirmationStorageKeys } from '../../../../../chat/common/chatTerminalToolStorageKeys.js';
 import { ChatConfiguration } from '../../../../../chat/common/constants.js';
 import type { ToolConfirmationAction } from '../../../../../chat/common/tools/languageModelToolsService.js';
 import { TerminalChatAgentToolsSettingId } from '../../../common/terminalChatAgentToolsConfiguration.js';

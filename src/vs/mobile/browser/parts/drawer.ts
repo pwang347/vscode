@@ -135,15 +135,22 @@ export class Drawer extends Disposable {
 		}
 	}
 
-	updateConnectionInfo(serverName: string, status: string): void {
+	updateConnectionInfo(serverName: string, status: string, editable = true): void {
 		this.connectionInfoLabel.textContent = '';
-		this.connectionInfoLabel.setAttribute('aria-label', localize('changeServer', "Connected to {0}. Click to change server.", serverName));
+		if (editable) {
+			this.connectionInfoLabel.setAttribute('aria-label', localize('changeServer', "Connected to {0}. Click to change server.", serverName));
+		} else {
+			this.connectionInfoLabel.setAttribute('aria-label', localize('connectedTo', "Connected to {0}.", serverName));
+			(this.connectionInfoLabel as HTMLButtonElement).disabled = true;
+		}
 		const dot = append(this.connectionInfoLabel, $('span.drawer-status-dot'));
 		dot.classList.add(status);
 		const label = append(this.connectionInfoLabel, $('span'));
 		label.textContent = serverName;
-		const chevron = append(this.connectionInfoLabel, $('span.drawer-footer-chevron'));
-		chevron.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronRight));
+		if (editable) {
+			const chevron = append(this.connectionInfoLabel, $('span.drawer-footer-chevron'));
+			chevron.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronRight));
+		}
 	}
 
 	updateWorkspaceInfo(workspacePath: string, allWorkspacePaths?: string[]): void {
@@ -153,20 +160,27 @@ export class Drawer extends Disposable {
 		const stripRemote = (p: string) => p.replace(/^vscode-remote:\/\/[^/]+/, '');
 		const rawPath = stripRemote(workspacePath);
 
-		// Use shorten() with all saved workspace paths for disambiguation
+		// Use basename when unique, shorten() only when disambiguation is needed
 		let displayName: string;
+		const baseName = posix.basename(rawPath) || rawPath;
 		if (allWorkspacePaths && allWorkspacePaths.length > 1) {
 			const rawPaths = allWorkspacePaths.map(stripRemote);
-			const idx = rawPaths.indexOf(rawPath);
-			const labels = shorten(rawPaths, posix.sep);
-			displayName = idx >= 0 ? labels[idx] : posix.basename(rawPath) || rawPath;
+			const baseNames = rawPaths.map(p => posix.basename(p) || p);
+			const isDuplicate = baseNames.filter(b => b === baseName).length > 1;
+			if (isDuplicate) {
+				const idx = rawPaths.indexOf(rawPath);
+				const labels = shorten(rawPaths, posix.sep);
+				displayName = idx >= 0 ? labels[idx] : baseName;
+			} else {
+				displayName = baseName;
+			}
 		} else {
-			displayName = posix.basename(rawPath) || rawPath;
+			displayName = baseName;
 		}
 
 		this.workspaceInfoLabel.setAttribute('aria-label', localize('changeWorkspace', "Workspace: {0}. Click to change workspace.", displayName));
 		const icon = append(this.workspaceInfoLabel, $('span'));
-		icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.rootFolder));
+		icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.folder));
 		const label = append(this.workspaceInfoLabel, $('span'));
 		label.textContent = displayName;
 		const chevron = append(this.workspaceInfoLabel, $('span.drawer-footer-chevron'));

@@ -11,8 +11,7 @@
 		<meta name="mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-		<meta name="apple-mobile-web-app-title" content="VS Code" />
-		<link rel="apple-touch-icon" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/code-192.png" />
+		<meta name="apple-mobile-web-app-title" content="VS Code Mobile" />
 
 		<!-- Disable pinch zooming, lock viewport for mobile -->
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -21,29 +20,23 @@
 		<meta name="theme-color" content="#ffffff" />
 
 		<!-- Workbench Configuration -->
-		<meta id="vscode-workbench-web-configuration" data-settings="{{WORKBENCH_WEB_CONFIGURATION}}" />
+		<meta id="vscode-workbench-web-configuration" data-settings="{{WORKBENCH_WEB_CONFIGURATION}}">
 
 		<!-- Workbench Auth Session -->
-		<meta id="vscode-workbench-auth-session" data-settings="{{WORKBENCH_AUTH_SESSION}}" />
+		<meta id="vscode-workbench-auth-session" data-settings="{{WORKBENCH_AUTH_SESSION}}">
 
-		<!-- Workbench Icon/Manifest/CSS -->
-		<link rel="icon" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/favicon.ico" type="image/x-icon" />
-		<link rel="manifest" href="{{WORKBENCH_WEB_BASE_URL}}/resources/server/manifest.json" crossorigin="use-credentials" />
-		<link rel="stylesheet" href="{{WORKBENCH_WEB_BASE_URL}}/out/vs/mobile/browser/mobile.css" />
+		<!-- Builtin Extensions -->
+		<meta id="vscode-workbench-builtin-extensions" data-settings="{{WORKBENCH_BUILTIN_EXTENSIONS}}">
 
 		<style>
-			/* Critical CSS to prevent FOUC and set safe area insets */
 			html, body {
 				margin: 0;
 				padding: 0;
 				width: 100%;
 				height: 100%;
 				overflow: hidden;
-				/* Support safe areas on iOS */
 				padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 			}
-
-			/* Prevent overscroll bounce on iOS */
 			body {
 				overscroll-behavior: none;
 				-webkit-overflow-scrolling: touch;
@@ -54,8 +47,6 @@
 				bottom: 0;
 				background: #ffffff;
 			}
-
-			/* Loading spinner shown while JS bundles download and parse */
 			.mobile-loading-splash {
 				position: fixed;
 				top: 0; left: 0; right: 0; bottom: 0;
@@ -88,7 +79,7 @@
 	<body aria-label="">
 		<div id="mobile-loading-splash" class="mobile-loading-splash">
 			<div class="spinner"></div>
-			<p id="mobile-loading-msg">Loading...</p>
+			<p id="mobile-loading-msg">Loading assets...</p>
 		</div>
 		<script>
 			// Show a contextual loading message based on URL params.
@@ -101,34 +92,30 @@
 					var name = path.split('/').filter(Boolean).pop() || folder;
 					msgEl.textContent = 'Loading workspace ' + name + '\u2026';
 				} else if (msgEl) {
-					msgEl.textContent = 'Loading\u2026';
+					msgEl.textContent = 'Loading assets\u2026';
 				}
 			})();
 		</script>
 	</body>
 
-	<!-- Startup (do not modify order of script tags!) -->
+	<!-- Startup -->
 	<script>
-		const baseUrl = new URL('{{WORKBENCH_WEB_BASE_URL}}', window.location.origin).toString();
-		globalThis._VSCODE_FILE_ROOT = baseUrl + '/out/';
+		globalThis._VSCODE_FILE_ROOT = 'http://localhost:5199/out/';
 		globalThis._VSCODE_MOBILE_APP = true;
-	</script>
-	<script>
-		performance.mark('code/willLoadWorkbenchMain');
-	</script>
-	<!-- always ensure built in english NLS messages -->
-	<script type="module" src="{{WORKBENCH_NLS_FALLBACK_URL}}"></script>
-	<!-- attempt to load NLS messages in case non-english -->
-	<script>
-		(function() {
-			const nlsUrl = '{{WORKBENCH_NLS_URL}}';
-			if (nlsUrl) {
-				const s = document.createElement('script');
-				s.type = 'module';
-				s.src = nlsUrl;
-				document.head.appendChild(s);
+		// Debug: capture TDZ errors with full stack traces
+		window.addEventListener('error', function(e) {
+			if (e.error && e.error.message && e.error.message.indexOf('before initialization') !== -1) {
+				var msg = e.error.message + '\n\nStack:\n' + (e.error.stack || 'no stack');
+				console.error('[TDZ Debug]', msg);
+				alert('[TDZ Debug] ' + e.error.message + '\nFile: ' + e.filename + ':' + e.lineno + ':' + e.colno);
 			}
-		})();
+		});
+		window.addEventListener('unhandledrejection', function(e) {
+			if (e.reason && e.reason.message && e.reason.message.indexOf('before initialization') !== -1) {
+				console.error('[TDZ Debug Promise]', e.reason.message, e.reason.stack);
+				alert('[TDZ Debug Promise] ' + e.reason.message + '\nStack: ' + (e.reason.stack || 'none').substring(0, 500));
+			}
+		});
 	</script>
-	<script type="module" src="{{WORKBENCH_WEB_BASE_URL}}/out/vs/mobile/browser/mobile.js"></script>
+	<script type="module" src="./index-mobile.ts"></script>
 </html>
