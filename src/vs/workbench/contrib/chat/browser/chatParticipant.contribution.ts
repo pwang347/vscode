@@ -22,6 +22,7 @@ import { ViewPaneContainer } from '../../../browser/parts/views/viewPaneContaine
 import { IWorkbenchContribution } from '../../../common/contributions.js';
 import { IViewContainersRegistry, IViewDescriptor, IViewsRegistry, ViewContainer, ViewContainerLocation, Extensions as ViewExtensions } from '../../../common/views.js';
 import { Extensions, IExtensionFeaturesRegistry, IExtensionFeatureTableRenderer, IRenderedData, IRowData, ITableData } from '../../../services/extensionManagement/common/extensionFeatures.js';
+import { isProposedApiEnabled } from '../../../services/extensions/common/extensions.js';
 import * as extensionsRegistry from '../../../services/extensions/common/extensionsRegistry.js';
 import { showExtensionsWithIdsCommandId } from '../../extensions/browser/extensionsActions.js';
 import { IExtension, IExtensionsWorkbenchService } from '../../extensions/common/extensions.js';
@@ -240,15 +241,15 @@ export class ChatExtensionPointHandler implements IWorkbenchContribution {
 						continue;
 					}
 
-					// if ((providerDescriptor.isDefault || providerDescriptor.modes) && !isProposedApiEnabled(extension.description, 'defaultChatParticipant')) {
-					// 	extension.collector.error(`Extension '${extension.description.identifier.value}' CANNOT use API proposal: defaultChatParticipant.`);
-					// 	continue;
-					// }
+					if ((providerDescriptor.isDefault || providerDescriptor.modes) && !isProposedApiEnabled(extension.description, 'defaultChatParticipant')) {
+						extension.collector.error(`Extension '${extension.description.identifier.value}' CANNOT use API proposal: defaultChatParticipant.`);
+						continue;
+					}
 
-					// if (providerDescriptor.locations && !isProposedApiEnabled(extension.description, 'chatParticipantAdditions')) {
-					// 	extension.collector.error(`Extension '${extension.description.identifier.value}' CANNOT use API proposal: chatParticipantAdditions.`);
-					// 	continue;
-					// }
+					if (providerDescriptor.locations && !isProposedApiEnabled(extension.description, 'chatParticipantAdditions')) {
+						extension.collector.error(`Extension '${extension.description.identifier.value}' CANNOT use API proposal: chatParticipantAdditions.`);
+						continue;
+					}
 
 					if (!providerDescriptor.id || !providerDescriptor.name) {
 						extension.collector.error(`Extension '${extension.description.identifier.value}' CANNOT register participant without both id and name.`);

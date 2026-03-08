@@ -251,15 +251,15 @@ export class ExtHostEditorTabs implements IExtHostEditorTabs {
 					const activeTabGroup = that._extHostTabGroups.find(candidate => candidate.groupId === activeTabGroupId)?.apiObject
 						?? that._extHostTabGroups[0]?.apiObject;
 					if (!activeTabGroup) {
-						// No tab groups available (e.g. mobile workbench before
-						// editor parts are initialized). Return a synthetic empty
+						// No tab groups available (e.g. mobile workbench where the
+						// editor part is created lazily). Return a synthetic empty
 						// group so extensions don't crash on property access.
-						return Object.freeze({
+						return Object.freeze<vscode.TabGroup>({
 							isActive: true,
-							viewColumn: 1 as vscode.ViewColumn,
+							viewColumn: 1,
 							activeTab: undefined,
 							tabs: [],
-						}) as vscode.TabGroup;
+						});
 					}
 					return activeTabGroup;
 				},

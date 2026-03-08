@@ -8,7 +8,6 @@ node_modules/
 extensions/**/dist/
 src/vs/base/browser/ui/codicons/codicon/codicon.ttf
 /out*/
-/Users/
 /extensions/**/out/
 build/node_modules
 build/darwin/.dmgbuild
