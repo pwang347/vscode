@@ -972,10 +972,11 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		const details = await this.chatService.getLocalSessionHistory();
 		const items: IChatSessionItem[] = details
 			.filter(d => convertLegacyChatSessionTiming(d.timing).lastRequestStarted !== undefined)
+			.sort((a, b) => b.lastMessageDate - a.lastMessageDate)
 			.map(d => ({
 				sessionId: d.sessionResource.toString(),
 				title: d.title,
-			})).reverse();
+			}));
 		this.drawer.updateSessions(items);
 	}
 

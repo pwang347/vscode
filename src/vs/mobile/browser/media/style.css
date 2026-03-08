@@ -897,6 +897,14 @@
 	transition: opacity 0.15s ease;
 }
 
+.mobile-workbench .mobile-chat-view.mobile-sending .chat-input-container .cursors-layer > .cursor {
+	display: none !important;
+}
+
+.mobile-workbench .mobile-chat-view.mobile-sending .chat-input-container textarea {
+	caret-color: transparent;
+}
+
 .mobile-workbench .mobile-chat-view.mobile-sending .chat-execute-toolbar .action-item .action-label {
 	animation: mobile-send-pulse 0.8s ease-in-out infinite;
 }
@@ -1102,6 +1110,7 @@
 	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 8px;
+	overflow: visible;
 }
 
 /* Each button — mobile-friendly sizing and rounded corners */
@@ -1178,21 +1187,13 @@
 	line-height: 20px;
 }
 
-/* Buttons container — wrap and center when stacked vertically */
+/* Buttons container — wrap and center when stacked horizontally */
 .mobile-workbench .notifications-list-container .notification-list-item .notification-list-item-buttons-container {
 	flex-wrap: wrap;
 	justify-content: center;
 }
 
-/*
- * Notification action buttons — larger tap targets.
- *
- * Focus outline fix: The platform rule on .monaco-button sets
- * outline-offset: 2px !important (5-class specificity). The outline
- * gets clipped by overflow:hidden on .monaco-list-row. We can't
- * remove that overflow. Instead we use a HIGHER specificity selector
- * (6 classes) with !important to force an inset outline.
- */
+/* Notification action buttons — larger tap targets */
 .mobile-workbench .notifications-list-container .notification-list-item .notification-list-item-buttons-container .monaco-button.monaco-text-button {
 	padding: 8px 14px;
 	font-size: 13px;
