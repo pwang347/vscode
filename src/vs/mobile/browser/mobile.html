@@ -17,7 +17,12 @@
 		<!-- Disable pinch zooming, lock viewport for mobile -->
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
-		<!-- Content Security Policy -->
+		<!-- Content Security Policy
+			NOTE: 'unsafe-inline' and 'unsafe-eval' are required to match the
+			standard VS Code web workbench CSP. 'unsafe-eval' is needed for
+			dynamic module loading. 'unsafe-inline' is needed for the inline
+			performance.mark() script and loading splash below. A nonce-based
+			approach would require server-side support to inject the nonce. -->
 		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' ws: wss: https: http:; worker-src 'self' blob:; frame-src 'self' https:;" />
 
 		<!-- Theme color for browser chrome -->

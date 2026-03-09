@@ -8,6 +8,7 @@ import { mainWindow } from '../../../../base/browser/window.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { getMobileNativeBridge, getCapacitorHapticsPlugin } from '../../../common/capacitorPlugins.js';
 
 export const IHapticFeedbackService = createDecorator<IHapticFeedbackService>('mobileHapticFeedbackService');
 
@@ -46,32 +47,15 @@ export interface IHapticFeedbackService {
 }
 
 /**
- * Interface for the Capacitor Haptics plugin, available at runtime in the app.
- */
-interface ICapacitorHaptics {
-	impact(options: { style: string }): Promise<void>;
-	notification(options: { type: string }): Promise<void>;
-	selectionChanged(): Promise<void>;
-}
-
-/**
- * Native JS bridge injected by the mobile app's WebView via
- * addJavascriptInterface. Persists across navigations, so it
- * remains available even on remote code-server pages where
- * Capacitor plugins are not injected.
- */
-interface IMobileNativeHapticsBridge {
-	hapticImpact(style: string): void;
-}
-
-/**
  * Haptic feedback service for mobile.
  *
  * In the Capacitor app, this bridges to the @capacitor/haptics native plugin
  * via the Capacitor plugin registry on globalThis.
+ * Falls back to the MobileNative JS bridge (via `addJavascriptInterface`)
+ * when Capacitor plugins are not available (e.g. on remote server pages).
  * In a web context (browser testing), haptics are no-ops.
  *
- * The service respects the system "reduce motion" accessibility setting --
+ * The service respects the system 'reduce motion' accessibility setting --
  * when enabled, all haptic methods become no-ops.
  */
 export class HapticFeedbackService extends Disposable implements IHapticFeedbackService {
@@ -95,30 +79,12 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 		}
 	}
 
-	private getHapticsPlugin(): ICapacitorHaptics | undefined {
-		try {
-			const capacitor = (globalThis as Record<string, unknown>).Capacitor as { Plugins?: Record<string, unknown> } | undefined;
-			return capacitor?.Plugins?.Haptics as ICapacitorHaptics | undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
-	private getNativeBridge(): IMobileNativeHapticsBridge | undefined {
-		try {
-			const bridge = (globalThis as Record<string, unknown>).MobileNative as IMobileNativeHapticsBridge | undefined;
-			return bridge && typeof bridge.hapticImpact === 'function' ? bridge : undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
 	async impact(style: HapticImpactStyle): Promise<void> {
 		if (this._prefersReducedMotion) {
 			return;
 		}
 
-		const haptics = this.getHapticsPlugin();
+		const haptics = getCapacitorHapticsPlugin();
 		if (haptics) {
 			try {
 				await haptics.impact({ style });
@@ -128,7 +94,7 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 			}
 		}
 
-		const bridge = this.getNativeBridge();
+		const bridge = getMobileNativeBridge();
 		if (bridge) {
 			try {
 				bridge.hapticImpact(style);
@@ -143,12 +109,22 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 			return;
 		}
 
-		const haptics = this.getHapticsPlugin();
+		const haptics = getCapacitorHapticsPlugin();
 		if (haptics) {
 			try {
 				await haptics.notification({ type });
+				return;
 			} catch {
-				// Plugin not available
+				// fall through to native bridge
+			}
+		}
+
+		const bridge = getMobileNativeBridge();
+		if (bridge) {
+			try {
+				bridge.hapticNotification(type);
+			} catch {
+				// Native bridge method may not exist
 			}
 		}
 	}
@@ -158,12 +134,22 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 			return;
 		}
 
-		const haptics = this.getHapticsPlugin();
+		const haptics = getCapacitorHapticsPlugin();
 		if (haptics) {
 			try {
 				await haptics.selectionChanged();
+				return;
 			} catch {
-				// Plugin not available
+				// fall through to native bridge
+			}
+		}
+
+		const bridge = getMobileNativeBridge();
+		if (bridge) {
+			try {
+				bridge.hapticSelectionChanged();
+			} catch {
+				// Native bridge method may not exist
 			}
 		}
 	}

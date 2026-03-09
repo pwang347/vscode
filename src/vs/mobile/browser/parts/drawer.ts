@@ -14,6 +14,9 @@ import { localize } from '../../../nls.js';
 import { posix } from '../../../base/common/path.js';
 import { shorten } from '../../../base/common/labels.js';
 
+/** Fallback timeout (ms) for drawer close transition. */
+const DRAWER_TRANSITION_FALLBACK_MS = 350;
+
 export interface IChatSessionItem {
 	readonly sessionId: string;
 	readonly title: string;
@@ -51,8 +54,12 @@ export class Drawer extends Disposable {
 	private _isOpen = false;
 	private _closeTimeout: ReturnType<typeof setTimeout> | undefined;
 	private readonly sessionDisposables = this._register(new DisposableStore());
-	private readonly _focusableElements: HTMLElement[] = [];
 	private readonly _focusTrapListener = this._register(new MutableDisposable());
+	private readonly _transitionEndListener = this._register(new MutableDisposable());
+	/** Static focusable elements (action buttons, footer buttons). */
+	private readonly _staticFocusable: HTMLElement[] = [];
+	/** Dynamic focusable elements (session list items). */
+	private _dynamicFocusable: HTMLElement[] = [];
 
 	private readonly drawerOpenKey;
 
@@ -105,13 +112,13 @@ export class Drawer extends Disposable {
 		// Footer: connection + workspace info (clickable to switch)
 		const footer = append(this.panel, $('.drawer-section.drawer-footer'));
 		this.connectionInfoLabel = append(footer, $('button.drawer-footer-item.connection-info'));
-		this._focusableElements.push(this.connectionInfoLabel);
+		this._staticFocusable.push(this.connectionInfoLabel);
 		this._register(addDisposableListener(this.connectionInfoLabel, 'click', () => {
 			this.close();
 			this._onDidPressConnection.fire();
 		}));
 		this.workspaceInfoLabel = append(footer, $('button.drawer-footer-item.workspace-info'));
-		this._focusableElements.push(this.workspaceInfoLabel);
+		this._staticFocusable.push(this.workspaceInfoLabel);
 		this._register(addDisposableListener(this.workspaceInfoLabel, 'click', () => {
 			this.close();
 			this._onDidPressWorkspace.fire();
@@ -129,12 +136,13 @@ export class Drawer extends Disposable {
 			this._onDidSelectAction.fire(action);
 			this.close();
 		}));
-		this._focusableElements.push(item);
+		this._staticFocusable.push(item);
 	}
 
 	updateSessions(sessions: IChatSessionItem[]): void {
 		this.sessionDisposables.clear();
 		this.sessionListContainer.textContent = '';
+		const newDynamic: HTMLElement[] = [];
 		for (const session of sessions) {
 			const item = append(this.sessionListContainer, $('button.drawer-session-item'));
 			const icon = append(item, $('span.session-icon'));
@@ -145,7 +153,9 @@ export class Drawer extends Disposable {
 				this._onDidSelectSession.fire(session.sessionId);
 				this.close();
 			}));
+			newDynamic.push(item);
 		}
+		this._dynamicFocusable = newDynamic;
 	}
 
 	updateConnectionInfo(serverName: string, status: string, editable = true): void {
@@ -218,7 +228,9 @@ export class Drawer extends Disposable {
 		this.container.classList.add('open');
 		this.drawerOpenKey.set(true);
 
-		// Focus trap: trap Tab/Shift+Tab within the drawer panel
+		// Focus trap: trap Tab/Shift+Tab within the drawer panel.
+		// Query focusable elements dynamically to include session items
+		// added after initial creation.
 		this._focusTrapListener.value = addDisposableListener(this.container, 'keydown', (e: KeyboardEvent) => {
 			if (e.key === 'Escape') {
 				this.close();
@@ -227,7 +239,7 @@ export class Drawer extends Disposable {
 			if (e.key !== 'Tab') {
 				return;
 			}
-			const focusable = this._focusableElements.filter(el => el.offsetParent !== null);
+			const focusable = this.getFocusableElements();
 			if (focusable.length === 0) {
 				return;
 			}
@@ -259,9 +271,10 @@ export class Drawer extends Disposable {
 			clearTimeout(this._closeTimeout);
 			this._closeTimeout = undefined;
 		}
-		// Wait for transition to finish, then hide the container
-		const onEnd = () => {
-			this.container.removeEventListener('transitionend', onEnd);
+		// Wait for transition to finish, then hide the container.
+		// Use addDisposableListener to avoid leak if drawer is disposed during transition.
+		this._transitionEndListener.value = addDisposableListener(this.container, 'transitionend', () => {
+			this._transitionEndListener.clear();
 			if (this._closeTimeout !== undefined) {
 				clearTimeout(this._closeTimeout);
 				this._closeTimeout = undefined;
@@ -269,10 +282,15 @@ export class Drawer extends Disposable {
 			if (!this._isOpen) {
 				this.container.style.display = 'none';
 			}
-		};
-		this.container.addEventListener('transitionend', onEnd);
+		});
 		// Fallback in case transitionend doesn't fire
-		this._closeTimeout = setTimeout(onEnd, 350);
+		this._closeTimeout = setTimeout(() => {
+			this._transitionEndListener.clear();
+			this._closeTimeout = undefined;
+			if (!this._isOpen) {
+				this.container.style.display = 'none';
+			}
+		}, DRAWER_TRANSITION_FALLBACK_MS);
 		this._onDidClose.fire();
 	}
 
@@ -282,5 +300,14 @@ export class Drawer extends Disposable {
 		} else {
 			this.open();
 		}
+	}
+
+	/**
+	 * Collect all visible focusable elements in the drawer panel.
+	 * Uses tracked element arrays instead of querySelectorAll.
+	 */
+	private getFocusableElements(): HTMLElement[] {
+		const all = [...this._staticFocusable, ...this._dynamicFocusable];
+		return all.filter(el => el.offsetParent !== null && !(el as HTMLButtonElement).disabled);
 	}
 }

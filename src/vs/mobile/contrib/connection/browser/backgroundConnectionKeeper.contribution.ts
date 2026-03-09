@@ -10,19 +10,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { PersistentConnectionEventType, ReconnectionWaitEvent } from '../../../../platform/remote/common/remoteAgentConnection.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { DomEmitter } from '../../../../base/browser/event.js';
-
-/**
- * Native bridge exposed by the Android app via `addJavascriptInterface`.
- * Available when running inside the Capacitor WebView.
- */
-interface MobileNativeBridge {
-	startBackgroundService(): void;
-	stopBackgroundService(): void;
-}
-
-function getMobileNativeBridge(): MobileNativeBridge | undefined {
-	return (mainWindow as unknown as Record<string, unknown>).MobileNative as MobileNativeBridge | undefined;
-}
+import { getMobileNativeBridge } from '../../../browser/nativeBridge.js';
 
 /**
  * Keeps the remote connection alive across mobile app background/foreground

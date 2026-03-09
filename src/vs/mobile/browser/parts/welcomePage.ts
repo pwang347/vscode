@@ -63,8 +63,16 @@ export class WelcomePage extends Disposable {
 	updateServers(servers: IServerInfo[]): void {
 		this.itemDisposables.clear();
 		this.serverListContainer.textContent = '';
+
+		if (servers.length === 0) {
+			const emptyState = append(this.serverListContainer, $('p.welcome-empty-state'));
+			emptyState.textContent = localize('noSavedServers', "No saved servers yet. Tap the button below to add one.");
+			return;
+		}
+
 		for (const server of servers) {
 			const item = append(this.serverListContainer, $('button.welcome-server-item'));
+			item.setAttribute('aria-label', localize('connectToServerItem', "Connect to {0} at {1}:{2}", server.name, server.address, server.port));
 			const serverIcon = append(item, $('span.server-icon'));
 			serverIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.vm));
 			const info = append(item, $('.server-info'));

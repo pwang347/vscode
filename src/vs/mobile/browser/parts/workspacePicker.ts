@@ -114,11 +114,21 @@ export class WorkspacePicker extends Disposable {
 			? this.currentWorkspaces.filter(ws => matchesFuzzy(query, ws.label || posix.basename(ws.path) || ws.path, true))
 			: this.currentWorkspaces;
 
+		if (filtered.length === 0) {
+			const emptyState = append(this.workspaceListContainer, $('p.workspace-picker-empty-state'));
+			emptyState.textContent = query
+				? localize('noMatchingWorkspaces', "No workspaces match your filter.")
+				: localize('noSavedWorkspaces', "No saved workspaces yet. Tap the folder button to add one.");
+			return;
+		}
+
 		const labels = this.computeLabels(filtered);
 
 		for (let i = 0; i < filtered.length; i++) {
 			const ws = filtered[i];
 			const item = append(this.workspaceListContainer, $('button.workspace-picker-item'));
+			const displayLabel = ws.label || posix.basename(ws.path) || labels[i];
+			item.setAttribute('aria-label', localize('openWorkspaceItem', "Open workspace {0} at {1}", displayLabel, ws.path));
 			const wsIcon = append(item, $('span.ws-icon'));
 			wsIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.folder));
 			const info = append(item, $('.ws-info'));

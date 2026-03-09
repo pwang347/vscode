@@ -119,6 +119,9 @@ const KEYBOARD_SCREEN_THRESHOLD = 200;
 /** Default fallback dimensions (iPhone-sized) for layout initialization. */
 const DEFAULT_DIMENSION = { width: 375, height: 812 };
 
+/** Delay (ms) before scheduling LifecyclePhase.Eventually. */
+const EVENTUALLY_PHASE_DELAY_MS = 2500;
+
 export class MobileWorkbench extends Disposable implements IWorkbenchLayoutService {
 
 	declare readonly _serviceBrand: undefined;
@@ -234,9 +237,11 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private topBar: TopBar | undefined;
 	private drawer: Drawer | undefined;
 	private chatViewContainer!: HTMLElement;
+	private chatViewElement!: HTMLElement;
 	private chatWidget: ChatWidget | undefined;
 	private chatService: IChatService | undefined;
 	private readonly currentModelRef = this._register(new MutableDisposable<IChatModelReference>());
+	private _instantiationService: IInstantiationService | undefined;
 
 	// Files view
 	private filesViewContainer!: HTMLElement;
@@ -545,13 +550,6 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	}
 
 	private setupTouchClickBridge(): void {
-		// Skip synthetic clicks when a screen reader may be active.
-		// Screen readers (VoiceOver, TalkBack) handle touch-to-click
-		// themselves and synthetic clicks would cause double-activation.
-		if (mainWindow.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
-			return;
-		}
-
 		let touchStartTime = 0;
 		let touchStartX = 0;
 		let touchStartY = 0;
@@ -757,21 +755,30 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 		// Chat view container (fills remaining space)
 		this.chatViewContainer = append(this.mainContainer, $('.mobile-active-view'));
+		this.chatViewContainer.setAttribute('role', 'main');
+		this.chatViewContainer.setAttribute('aria-label', localize('chatView', "Chat"));
 		const chatView = append(this.chatViewContainer, $('.mobile-view.mobile-chat-view'));
 
 		// Files view container (hidden by default, shown when "Files" is tapped)
 		this.filesViewContainer = append(this.mainContainer, $('.mobile-active-view.mobile-files-view'));
 		this.filesViewContainer.style.display = 'none';
+		this.filesViewContainer.setAttribute('role', 'complementary');
+		this.filesViewContainer.setAttribute('aria-label', localize('filesView', "File Explorer"));
 
 		// Editor overlay (hidden by default, shown when a file is opened from explorer or chat)
 		this.editorOverlayContainer = append(this.mainContainer, $('.mobile-active-view.mobile-editor-overlay'));
 		this.editorOverlayContainer.style.display = 'none';
+		this.editorOverlayContainer.setAttribute('role', 'main');
+		this.editorOverlayContainer.setAttribute('aria-label', localize('editorView', "Editor"));
 
 		// Create chat widget when in chat phase
 		const remoteAuthority = urlParams.get('remoteAuthority') || this.getConfigRemoteAuthority();
 		if (remoteAuthority && (urlParams.has('folder') || urlParams.has('workspace'))) {
 			this.createChatWidget(instantiationService, chatView);
 		}
+		// Store refs for lazy chat widget creation on phase transition
+		this._instantiationService = instantiationService;
+		this.chatViewElement = chatView;
 
 		// Drawer (overlays entire workbench)
 		this.drawer = this._register(instantiationService.createInstance(Drawer, this.mainContainer));
@@ -869,6 +876,12 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		if (isChat) {
 			this.topBar?.show();
 			this.chatViewContainer.style.display = '';
+			// Lazily create the chat widget on first transition to chat phase
+			// (e.g. when the user picks a workspace from the picker).
+			if (!this.chatWidget && this._instantiationService) {
+				this.createChatWidget(this._instantiationService, this.chatViewElement);
+			}
+			this.layoutChatWidget();
 		} else {
 			this.topBar?.hide();
 			this.chatViewContainer.style.display = 'none';
@@ -960,7 +973,9 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		// If the selected workspace is already the current one on the same server,
 		// just switch back to the chat phase without reloading.
 		const currentAuthority = new URLSearchParams(mainWindow.location.search).get('remoteAuthority') || this.getConfigRemoteAuthority();
-		if (this._activeWorkspacePath && this._activeWorkspacePath === path && currentAuthority === remoteAuthority) {
+		// Normalize the workspace path for comparison: strip vscode-remote:// prefix.
+		const normalizedPath = path.replace(/^vscode-remote:\/\/[^/]*/, '');
+		if (this._activeWorkspacePath && this._activeWorkspacePath === normalizedPath && currentAuthority === remoteAuthority) {
 			this.showPhase(MobilePhase.Chat, this.phaseKey);
 			return;
 		}
@@ -982,10 +997,14 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	 */
 	private getConfigRemoteAuthority(): string | undefined {
 		// eslint-disable-next-line no-restricted-syntax
-		const configData = mainWindow.document.getElementById('vscode-workbench-web-configuration')?.getAttribute('data-settings');
+		const configEl = mainWindow.document.getElementById('vscode-workbench-web-configuration');
+		const configData = configEl?.getAttribute('data-settings');
 		if (configData) {
 			try {
-				const config = JSON.parse(configData.replace(/&quot;/g, '"'));
+				// The browser already decodes HTML entities in attribute values,
+				// so getAttribute() returns the raw JSON string. No manual
+				// &quot; replacement needed.
+				const config = JSON.parse(configData);
 				return config.remoteAuthority || undefined;
 			} catch {
 				return undefined;
@@ -1306,8 +1325,8 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		this.setRestored();
 
 		const eventuallyPhaseScheduler = this._register(new RunOnceScheduler(() => {
-			this._register(runWhenWindowIdle(mainWindow, () => lifecycleService.phase = LifecyclePhase.Eventually, 2500));
-		}, 2500));
+			this._register(runWhenWindowIdle(mainWindow, () => lifecycleService.phase = LifecyclePhase.Eventually, EVENTUALLY_PHASE_DELAY_MS));
+		}, EVENTUALLY_PHASE_DELAY_MS));
 		eventuallyPhaseScheduler.schedule();
 	}
 

@@ -17,10 +17,21 @@ import { navigateToShell } from '../../../browser/navigation.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
 
 /**
+ * Validate that a hostname/address is safe to use.
+ * Allows alphanumeric, dots, hyphens, and colons (for IPv6).
+ */
+function isValidHostname(address: string): boolean {
+	return /^[a-zA-Z0-9][a-zA-Z0-9.\-:]*$/.test(address) && address.length <= 253;
+}
+
+/**
  * Show a mobile-friendly connection form as an HTML overlay.
+ * Uses an AbortController to properly clean up all event listeners on close.
  */
 function showConnectionForm(savedServers: IServerInfo[]): Promise<IServerInfo | undefined> {
 	return new Promise((resolve) => {
+		const abortController = new AbortController();
+		const signal = abortController.signal;
 		const overlay = append(mainWindow.document.body, $('.mobile-connection-overlay'));
 
 		const title = append(overlay, $('h2.connection-form-title'));
@@ -35,7 +46,7 @@ function showConnectionForm(savedServers: IServerInfo[]): Promise<IServerInfo | 
 			for (const server of savedServers) {
 				const btn = append(overlay, $('button.connection-form-saved-server'));
 				btn.textContent = `${server.name} (${server.address}:${server.port})`;
-				btn.addEventListener('click', () => { cleanup(); resolve(server); });
+				btn.addEventListener('click', () => { cleanup(); resolve(server); }, { signal });
 			}
 			append(overlay, $('hr.connection-form-separator'));
 		}
@@ -62,7 +73,7 @@ function showConnectionForm(savedServers: IServerInfo[]): Promise<IServerInfo | 
 
 		const cancelBtn = append(btnRow, $('button.connection-form-cancel'));
 		cancelBtn.textContent = localize('cancel', "Cancel");
-		cancelBtn.addEventListener('click', () => { cleanup(); resolve(undefined); });
+		cancelBtn.addEventListener('click', () => { cleanup(); resolve(undefined); }, { signal });
 
 		const connectBtn = append(btnRow, $('button.connection-form-connect'));
 		connectBtn.textContent = localize('connect', "Connect");
@@ -74,6 +85,11 @@ function showConnectionForm(savedServers: IServerInfo[]): Promise<IServerInfo | 
 
 			if (!address) {
 				errorBox.textContent = localize('addressRequired', "Host / Tailscale name is required.");
+				errorBox.style.display = 'block';
+				return;
+			}
+			if (!isValidHostname(address)) {
+				errorBox.textContent = localize('invalidAddress', "Invalid hostname. Use only letters, numbers, dots, and hyphens.");
 				errorBox.style.display = 'block';
 				return;
 			}
@@ -93,9 +109,10 @@ function showConnectionForm(savedServers: IServerInfo[]): Promise<IServerInfo | 
 				port,
 				connectionToken: token || undefined,
 			});
-		});
+		}, { signal });
 
 		function cleanup() {
+			abortController.abort();
 			overlay.remove();
 		}
 	});
@@ -118,7 +135,7 @@ class ConnectionContribution extends Disposable implements IWorkbenchContributio
 		if (this.connectionService.sessionEditable) {
 			const params = new URLSearchParams(mainWindow.location.search);
 			if (params.has('remoteAuthority')) {
-				const lastServer = (this.connectionService as import('../../../services/connection/browser/connectionService.js').ConnectionService).getLastServer();
+				const lastServer = this.connectionService.getLastServer();
 				if (lastServer) {
 					this.connectionService.connect(lastServer);
 				}

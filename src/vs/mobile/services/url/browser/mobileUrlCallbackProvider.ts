@@ -7,20 +7,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI, UriComponents } from '../../../../base/common/uri.js';
 import type { IURLCallbackProvider } from '../../../../workbench/services/url/browser/urlService.js';
-
-/**
- * Capacitor App plugin interface for listening to deep-link URL opens.
- */
-interface ICapacitorAppPlugin {
-	addListener(event: 'appUrlOpen', callback: (data: { url: string }) => void): Promise<{ remove: () => void }>;
-}
-
-/**
- * Capacitor Browser plugin interface for opening URLs in the system browser.
- */
-interface ICapacitorBrowserPlugin {
-	open(options: { url: string }): Promise<void>;
-}
+import { getCapacitorAppPlugin } from '../../../common/capacitorPlugins.js';
 
 /**
  * URL callback provider for the mobile (Capacitor) workbench.
@@ -62,7 +49,7 @@ export class MobileURLCallbackProvider extends Disposable implements IURLCallbac
 	 * and this listener fires with the full URL.
 	 */
 	private _registerAppUrlListener(): void {
-		const appPlugin = this._getAppPlugin();
+		const appPlugin = getCapacitorAppPlugin();
 		if (appPlugin) {
 			const listenerPromise = appPlugin.addListener('appUrlOpen', (data: { url: string }) => {
 				try {
@@ -81,9 +68,16 @@ export class MobileURLCallbackProvider extends Disposable implements IURLCallbac
 		// directly via WebView.evaluateJavascript. This handles the case where
 		// the Capacitor App plugin isn't active on a server-served page.
 		// Scoped under a namespace to reduce global collision risk.
+		const expectedScheme = this._uriScheme;
 		const callbackFn = (url: string) => {
 			try {
 				const uri = URI.parse(url);
+				// Only accept URIs matching the expected app scheme to prevent
+				// arbitrary URI injection from malicious scripts.
+				if (uri.scheme !== expectedScheme) {
+					console.warn(`[mobile] Rejected URL callback with unexpected scheme: ${uri.scheme}`);
+					return;
+				}
 				this._onCallback.fire(uri);
 			} catch {
 				// Malformed URL -- ignore
@@ -119,27 +113,5 @@ export class MobileURLCallbackProvider extends Disposable implements IURLCallbac
 			path: '/',
 			query: queryParams.join('&'),
 		});
-	}
-
-	private _getAppPlugin(): ICapacitorAppPlugin | undefined {
-		try {
-			const capacitor = (globalThis as Record<string, unknown>).Capacitor as { Plugins?: Record<string, unknown> } | undefined;
-			return capacitor?.Plugins?.App as ICapacitorAppPlugin | undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
-	/**
-	 * Get the Capacitor Browser plugin for opening URLs in the system browser.
-	 * Exposed as a static helper so the mobile external opener can use it.
-	 */
-	static getBrowserPlugin(): ICapacitorBrowserPlugin | undefined {
-		try {
-			const capacitor = (globalThis as Record<string, unknown>).Capacitor as { Plugins?: Record<string, unknown> } | undefined;
-			return capacitor?.Plugins?.Browser as ICapacitorBrowserPlugin | undefined;
-		} catch {
-			return undefined;
-		}
 	}
 }

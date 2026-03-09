@@ -6,19 +6,7 @@
 import { mainWindow } from '../../base/browser/window.js';
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { IDisposable } from '../../base/common/lifecycle.js';
-
-interface IMobileNativeShellBridge {
-	navigateToShell(): void;
-	minimizeApp(): void;
-}
-
-function getMobileNativeBridge(): IMobileNativeShellBridge | undefined {
-	try {
-		return (mainWindow as unknown as Record<string, unknown>).MobileNative as IMobileNativeShellBridge | undefined;
-	} catch {
-		return undefined;
-	}
-}
+import { getMobileNativeBridge } from './nativeBridge.js';
 
 /**
  * Listen for the Android hardware back button.

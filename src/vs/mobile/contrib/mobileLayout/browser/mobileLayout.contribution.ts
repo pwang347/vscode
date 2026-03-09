@@ -11,8 +11,12 @@ import { mainWindow } from '../../../../base/browser/window.js';
 
 /**
  * Mobile layout contribution -- hides desktop-only chrome when
- * connected to a remote server. Navigation is handled by the
- * MobileWorkbench's drawer and phase-based layout.
+ * connected to a remote server.
+ *
+ * NOTE: When running via MobileWorkbench, part visibility is already
+ * managed by MobileWorkbench.isVisible(). This contribution serves as
+ * a safety net for the web browser code path where the standard Workbench
+ * is used (e.g. when the mobile CSS is loaded but MobileWorkbench is not).
  */
 class MobileLayoutContribution extends Disposable implements IWorkbenchContribution {
 

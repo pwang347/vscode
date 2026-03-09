@@ -20,6 +20,7 @@ import { Emitter } from '../../base/common/event.js';
 import { MobileWorkbench, IMobileWorkbenchOptions } from './workbench.js';
 import { MobileURLCallbackProvider } from '../services/url/browser/mobileUrlCallbackProvider.js';
 import type { ISecretStorageProvider } from '../../platform/secrets/common/secrets.js';
+import { getMobileNativeBridge } from './nativeBridge.js';
 
 // Import mobile entry point -- brings in the full web workbench
 // services plus mobile-specific services and contributions.
@@ -58,7 +59,12 @@ class MobileWorkspaceProvider extends Disposable implements IWorkspaceProvider {
 					break;
 				case 'payload':
 					try {
-						payload = parse(value);
+						// Use JSON.parse instead of marshalling parse to avoid
+						// deserialization of arbitrary typed objects from URL params.
+						const parsed = JSON.parse(value);
+						if (parsed && typeof parsed === 'object') {
+							payload = parsed;
+						}
 					} catch (error) {
 						console.error(error);
 					}
@@ -67,7 +73,7 @@ class MobileWorkspaceProvider extends Disposable implements IWorkspaceProvider {
 		});
 
 		// Fallback to config attributes
-		if (!workspace!) {
+		if (!workspace) {
 			if (config.folderUri) {
 				workspace = { folderUri: URI.revive(config.folderUri) };
 			} else if (config.workspaceUri) {
@@ -75,13 +81,15 @@ class MobileWorkspaceProvider extends Disposable implements IWorkspaceProvider {
 			}
 		}
 
-		return new MobileWorkspaceProvider(workspace!, payload);
+		// workspace may still be undefined if no folder/workspace was specified.
+		// This is valid -- the workbench will open without a workspace.
+		return new MobileWorkspaceProvider(workspace, payload);
 	}
 
 	readonly trusted = true;
 
 	private constructor(
-		readonly workspace: IWorkspace,
+		readonly workspace: IWorkspace | undefined,
 		readonly payload: object,
 	) {
 		super();
@@ -89,8 +97,9 @@ class MobileWorkspaceProvider extends Disposable implements IWorkspaceProvider {
 
 	async open(workspace: IWorkspace, options?: { reuse?: boolean; payload?: object }): Promise<boolean> {
 		// On mobile, we always reuse the same window (single-window model).
-		// Preserve existing query params (remoteAuthority, connectionToken)
-		// so the connection survives across folder opens.
+		// Preserve existing query params (remoteAuthority) so the connection
+		// survives across folder opens. connectionToken is stored in
+		// sessionStorage (not URL) to avoid leaking it in browser history.
 		const params = new URLSearchParams(mainWindow.location.search);
 
 		// Clear old workspace params before setting new ones
@@ -159,7 +168,7 @@ class MobileBrowserMain extends BrowserMain {
  */
 function createMobileWebSocketFactory(): IWebSocketFactory {
 	return {
-		create(url: string, debugLabel: string): IWebSocket {
+		create(url: string, _debugLabel: string): IWebSocket {
 			// Only downgrade to ws:// for localhost dev servers
 			let wsUrl = url;
 			try {
@@ -189,38 +198,27 @@ function createMobileWebSocketFactory(): IWebSocketFactory {
 				onClose: onClose.event,
 				onError: onError.event,
 				send(data: ArrayBuffer | ArrayBufferView) { socket.send(data); },
-				close() { socket.close(); },
+				close() {
+					socket.close();
+					// Dispose emitters to free listener references
+					onData.dispose();
+					onOpen.dispose();
+					onClose.dispose();
+					onError.dispose();
+				},
 			};
 		}
 	};
 }
 
 /**
- * Native JS bridge for secure storage, injected by the Android app via
- * `WebView.addJavascriptInterface("MobileNative", ...)`.
- *
- * Unlike Capacitor plugins, this bridge persists across WebView navigations
- * because `addJavascriptInterface` objects survive page loads. This makes it
- * the only reliable secure storage option since the WebView navigates to a
- * remote server page where Capacitor plugins are not available.
- *
- * The native side delegates to EncryptedSharedPreferences (Android Keystore)
- * or Keychain (iOS).
- */
-interface IMobileNativeSecureStorage {
-	secureStorageGet(key: string): string | null;
-	secureStorageSet(key: string, value: string): void;
-	secureStorageRemove(key: string): void;
-	secureStorageKeys(): string; // JSON-encoded string[]
-}
-
-/**
  * Secret storage provider for mobile.
  *
- * Uses the `MobileNative` JS bridge injected via `addJavascriptInterface`.
- * This bridge persists across WebView navigations, so it works on both the
- * local Capacitor shell and remote server pages. The native side delegates
- * to Android Keystore (EncryptedSharedPreferences) or iOS Keychain.
+ * Uses the shared `MobileNative` JS bridge (see `nativeBridge.ts`) injected
+ * via `addJavascriptInterface`. The bridge persists across WebView navigations,
+ * so it works on both the local Capacitor shell and remote server pages.
+ * The native side delegates to Android Keystore (EncryptedSharedPreferences)
+ * or iOS Keychain.
  *
  * If the bridge is not available (e.g. running in a plain browser), secrets
  * are stored **in-memory only** and lost on page reload.
@@ -229,20 +227,19 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 
 	type: 'persisted' | 'in-memory';
 
-	private readonly _bridge: IMobileNativeSecureStorage | undefined;
+	private readonly _bridge = getMobileNativeBridge();
 	private readonly _memoryStore = new Map<string, string>();
 
 	constructor() {
-		this._bridge = this._getNativeBridge();
-		this.type = this._bridge ? 'persisted' : 'in-memory';
-		if (!this._bridge) {
+		this.type = this._bridge && typeof this._bridge.secureStorageGet === 'function' ? 'persisted' : 'in-memory';
+		if (this.type === 'in-memory') {
 			console.warn('[mobile] MobileNative secure storage bridge not available. '
 				+ 'Secrets will be kept in-memory only and lost on reload.');
 		}
 	}
 
 	async get(key: string): Promise<string | undefined> {
-		if (this._bridge) {
+		if (this._bridge && this.type === 'persisted') {
 			try {
 				return this._bridge.secureStorageGet(key) ?? undefined;
 			} catch {
@@ -253,7 +250,7 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 	}
 
 	async set(key: string, value: string): Promise<void> {
-		if (this._bridge) {
+		if (this._bridge && this.type === 'persisted') {
 			this._bridge.secureStorageSet(key, value);
 			return;
 		}
@@ -261,7 +258,7 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 	}
 
 	async delete(key: string): Promise<void> {
-		if (this._bridge) {
+		if (this._bridge && this.type === 'persisted') {
 			try { this._bridge.secureStorageRemove(key); } catch { /* key may not exist */ }
 			return;
 		}
@@ -269,7 +266,7 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 	}
 
 	async keys(): Promise<string[]> {
-		if (this._bridge) {
+		if (this._bridge && this.type === 'persisted') {
 			try {
 				return JSON.parse(this._bridge.secureStorageKeys());
 			} catch {
@@ -277,19 +274,6 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 			}
 		}
 		return [...this._memoryStore.keys()];
-	}
-
-	private _getNativeBridge(): IMobileNativeSecureStorage | undefined {
-		try {
-			const bridge = (globalThis as Record<string, unknown>).MobileNative as
-				IMobileNativeSecureStorage | undefined;
-			if (bridge && typeof bridge.secureStorageGet === 'function') {
-				return bridge;
-			}
-			return undefined;
-		} catch {
-			return undefined;
-		}
 	}
 }
 
@@ -314,7 +298,16 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 	// Check for remote authority from URL params (set by ConnectionService)
 	const urlParams = new URL(mainWindow.location.href).searchParams;
 	const remoteAuthority = urlParams.get('remoteAuthority') || config.remoteAuthority;
-	const connectionToken = urlParams.get('connectionToken') || config.connectionToken;
+
+	// connectionToken is stored in sessionStorage to avoid exposing it
+	// in URL query strings (which leak into browser history, server logs,
+	// and referer headers). Falls back to config for server-injected tokens.
+	const sessionToken = mainWindow.sessionStorage.getItem('mobile.connectionToken');
+	const connectionToken = sessionToken || config.connectionToken;
+	// Clear the one-time-use token from sessionStorage after reading
+	if (sessionToken) {
+		mainWindow.sessionStorage.removeItem('mobile.connectionToken');
+	}
 
 	// Build construction options for the mobile workbench
 	const options: IWorkbenchConstructionOptions = {

@@ -164,6 +164,16 @@
 	font-size: 16px;
 }
 
+/* Empty state text for welcome page and workspace picker */
+.mobile-workbench .welcome-empty-state,
+.mobile-workbench .workspace-picker-empty-state {
+	text-align: center;
+	padding: 20px 16px;
+	font-size: 14px;
+	color: var(--vscode-descriptionForeground);
+	line-height: 1.5;
+}
+
 .mobile-workbench .welcome-server-item.loading {
 	opacity: 0.7;
 	pointer-events: none;

@@ -2091,6 +2091,7 @@ export default tseslint.config(
 						'vs/editor/contrib/*/~',
 						'vs/workbench/~',
 						'vs/workbench/services/*/~',
+						'vs/mobile/~',
 						'vs/mobile/services/*/~'
 					]
 				},

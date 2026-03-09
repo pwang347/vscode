@@ -8,25 +8,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IWorkbenchContribution, registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
-import { MobileURLCallbackProvider } from '../../../services/url/browser/mobileUrlCallbackProvider.js';
-
-/**
- * Capacitor Browser plugin interface for opening URLs in the system browser.
- */
-interface ICapacitorBrowserPlugin {
-	open(options: { url: string }): Promise<void>;
-	close(): Promise<void>;
-}
-
-/**
- * Native JS bridge injected by the mobile app via WebView.addJavascriptInterface.
- * Persists across WebView navigations, so it remains available even when the
- * WebView is serving content from a remote code server (where Capacitor
- * plugins may not be injected).
- */
-interface IMobileNativeBridge {
-	openExternal(url: string): void;
-}
+import { getMobileNativeBridge, getCapacitorBrowserPlugin } from '../../../browser/nativeBridge.js';
 
 /**
  * Overrides the default external opener on mobile to open URLs in an in-app
@@ -53,8 +35,8 @@ class MobileExternalOpenerContribution extends Disposable implements IWorkbenchC
 	) {
 		super();
 
-		const browserPlugin = this._getBrowserPlugin();
-		const nativeBridge = this._getNativeBridge();
+		const browserPlugin = getCapacitorBrowserPlugin();
+		const nativeBridge = getMobileNativeBridge();
 
 		if (browserPlugin) {
 			openerService.setDefaultExternalOpener({
@@ -78,19 +60,6 @@ class MobileExternalOpenerContribution extends Disposable implements IWorkbenchC
 					return true;
 				}
 			});
-		}
-	}
-
-	private _getBrowserPlugin(): ICapacitorBrowserPlugin | undefined {
-		return MobileURLCallbackProvider.getBrowserPlugin() as ICapacitorBrowserPlugin | undefined;
-	}
-
-	private _getNativeBridge(): IMobileNativeBridge | undefined {
-		try {
-			const bridge = (mainWindow as unknown as Record<string, unknown>).MobileNative as IMobileNativeBridge | undefined;
-			return bridge && typeof bridge.openExternal === 'function' ? bridge : undefined;
-		} catch {
-			return undefined;
 		}
 	}
 }

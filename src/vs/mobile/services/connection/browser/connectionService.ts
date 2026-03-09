@@ -8,6 +8,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
 
 export const IConnectionService = createDecorator<IConnectionService>('mobileConnectionService');
 
@@ -65,9 +66,14 @@ export interface IConnectionService {
 	saveServer(server: IServerInfo): void;
 
 	/**
-	 * Remove a saved server.
+	 * Remove a saved server by address and port.
 	 */
-	removeServer(address: string): void;
+	removeServer(address: string, port: number): void;
+
+	/**
+	 * Get the last connected server (for auto-reconnect).
+	 */
+	getLastServer(): IServerInfo | undefined;
 }
 
 const SAVED_SERVERS_KEY = 'mobile.savedServers';
@@ -104,6 +110,7 @@ export class ConnectionService extends Disposable implements IConnectionService 
 
 	constructor(
 		@IStorageService private readonly storageService: IStorageService,
+		@ILogService private readonly logService: ILogService,
 	) {
 		super();
 	}
@@ -125,7 +132,9 @@ export class ConnectionService extends Disposable implements IConnectionService 
 			// Save as last connected server
 			this.storageService.store(LAST_SERVER_KEY, JSON.stringify(server), StorageScope.APPLICATION, StorageTarget.USER);
 
-			// Save to server list
+			// Save to server list (without connection token -- tokens are
+			// stored in sessionStorage for the active session and in the
+			// native keychain via MobileSecretStorageProvider for persistence).
 			this.saveServer(server);
 
 			// Check if we already have the correct remoteAuthority in the URL.
@@ -137,15 +146,22 @@ export class ConnectionService extends Disposable implements IConnectionService 
 				return;
 			}
 
-			// Reload the app with remoteAuthority in the URL.
-			// The mobile.ts bootstrap reads these and passes remoteAuthority
-			// + connectionToken to the workbench options, which establishes
-			// a WebSocket connection to the server's extension host.
+			// Store connection token in sessionStorage (survives the reload
+			// but not exposed in URL query strings, browser history, or
+			// referer headers).
+			if (server.connectionToken) {
+				mainWindow.sessionStorage.setItem('mobile.connectionToken', server.connectionToken);
+			} else {
+				mainWindow.sessionStorage.removeItem('mobile.connectionToken');
+			}
+
+			// Reload the app with remoteAuthority in the URL (no token).
+			// The mobile.ts bootstrap reads the token from sessionStorage
+			// and passes it to the workbench options.
 			const params = new URLSearchParams();
 			params.set('remoteAuthority', desiredAuthority);
-			if (server.connectionToken) {
-				params.set('connectionToken', server.connectionToken);
-			}
+			// NOTE: this triggers a page reload and the promise never resolves.
+			this.logService.info(`[mobile] Connecting to ${desiredAuthority}, reloading...`);
 			mainWindow.location.search = params.toString();
 		} catch (err) {
 			this.setStatus('disconnected');
@@ -175,17 +191,25 @@ export class ConnectionService extends Disposable implements IConnectionService 
 
 	saveServer(server: IServerInfo): void {
 		const servers = this.getSavedServers();
+		// Strip connectionToken from persisted data -- tokens should not
+		// be stored in plain-text localStorage. For persistent token storage,
+		// use the native keychain via MobileSecretStorageProvider.
+		const serverToSave: IServerInfo = {
+			name: server.name,
+			address: server.address,
+			port: server.port,
+		};
 		const existing = servers.findIndex(s => s.address === server.address && s.port === server.port);
 		if (existing >= 0) {
-			servers[existing] = server;
+			servers[existing] = serverToSave;
 		} else {
-			servers.push(server);
+			servers.push(serverToSave);
 		}
 		this.storageService.store(SAVED_SERVERS_KEY, JSON.stringify(servers), StorageScope.APPLICATION, StorageTarget.USER);
 	}
 
-	removeServer(address: string): void {
-		const servers = this.getSavedServers().filter(s => s.address !== address);
+	removeServer(address: string, port: number): void {
+		const servers = this.getSavedServers().filter(s => !(s.address === address && s.port === port));
 		this.storageService.store(SAVED_SERVERS_KEY, JSON.stringify(servers), StorageScope.APPLICATION, StorageTarget.USER);
 	}
 
