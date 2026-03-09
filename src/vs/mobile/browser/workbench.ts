@@ -237,6 +237,12 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private _editorOpenedFrom: 'chat' | 'files' = 'files';
 	private _filesViewReady = false;
 
+	// Tracks the currently active workspace path so that navigating
+	// back to the workspace picker and re-selecting the same workspace
+	// can skip a full page reload. The URL `folder` param is cleared
+	// by switchToWorkspacePicker(), so we cannot rely on it.
+	private _activeWorkspacePath: string | undefined;
+
 	private _keyboardVisible = false;
 	private mainWindowFullscreen = false;
 
@@ -255,6 +261,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private viewDescriptorService!: IViewDescriptorService;
 	private commandService!: ICommandService;
 	private storageService!: IStorageService;
+	private dialogService!: IDialogService;
 	private fileDialogService!: IFileDialogService;
 	private quickInputService!: IQuickInputService;
 	private workspaceContextService!: IWorkspaceContextService;
@@ -326,6 +333,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 				const contextKeyService = accessor.get(IContextKeyService);
 				this.commandService = accessor.get(ICommandService);
 				this.storageService = storageService;
+				this.dialogService = dialogService;
 				this.fileDialogService = accessor.get(IFileDialogService);
 
 				// Set code block renderer
@@ -602,6 +610,11 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 		if (remoteAuthority && hasFolder) {
 			this.phase = MobilePhase.Chat;
+			// Remember the active workspace path for same-workspace detection
+			const folderParam = urlParams.get('folder') || urlParams.get('workspace');
+			if (folderParam) {
+				this._activeWorkspacePath = folderParam.replace(/^vscode-remote:\/\/[^/]*/, '');
+			}
 		} else if (remoteAuthority) {
 			this.phase = MobilePhase.WorkspacePicker;
 		} else {
@@ -649,7 +662,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 					break;
 				case MobilePhase.WorkspacePicker:
 					// Workspace picker → server list (shell)
-					navigateToShell();
+					this.confirmDisconnectAndNavigateToShell();
 					break;
 				case MobilePhase.Welcome:
 					// Welcome page (server list) → minimize the app
@@ -787,7 +800,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 				return;
 			}
 			// Go back to the app shell (server selection page)
-			navigateToShell();
+			this.confirmDisconnectAndNavigateToShell();
 		}));
 		this._register(this.drawer.onDidPressWorkspace(() => {
 			// Switch to workspace picker in-place (no reload)
@@ -829,6 +842,21 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		} else {
 			this.topBar?.hide();
 			this.chatViewContainer.style.display = 'none';
+		}
+	}
+
+	/**
+	 * Show a confirmation dialog before disconnecting and navigating
+	 * back to the server selection page (shell).
+	 */
+	private async confirmDisconnectAndNavigateToShell(): Promise<void> {
+		const { confirmed } = await this.dialogService.confirm({
+			message: localize('disconnectConfirmMessage', "Disconnect from Server?"),
+			detail: localize('disconnectConfirmDetail', "This will disconnect you from the current server and return to the server list."),
+			primaryButton: localize({ key: 'disconnect', comment: ['&& denotes a mnemonic character'] }, "&&Disconnect"),
+		});
+		if (confirmed) {
+			navigateToShell();
 		}
 	}
 
@@ -901,14 +929,9 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 		// If the selected workspace is already the current one, just switch
 		// back to the chat phase without reloading.
-		const currentFolder = new URLSearchParams(mainWindow.location.search).get('folder');
-		if (currentFolder) {
-			// The URL folder may be a full vscode-remote:// URI — extract the path
-			const currentPath = currentFolder.replace(/^vscode-remote:\/\/[^/]*/, '');
-			if (currentPath === path) {
-				this.showPhase(MobilePhase.Chat, this.phaseKey);
-				return;
-			}
+		if (this._activeWorkspacePath && this._activeWorkspacePath === path) {
+			this.showPhase(MobilePhase.Chat, this.phaseKey);
+			return;
 		}
 
 		const params = new URLSearchParams(mainWindow.location.search);

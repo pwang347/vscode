@@ -922,6 +922,7 @@
 		"--insert-border-color",
 		"--last-tab-margin-right",
 		"--list-scroll-right-offset",
+		"--mobile-sheet-translate-y",
 		"--monaco-monospace-font",
 		"--monaco-monospace-font",
 		"--notebook-cell-input-preview-font-family",

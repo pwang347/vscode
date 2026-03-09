@@ -47,7 +47,9 @@
 
 	/* Slide-up animation */
 	transform: translateY(100%);
-	transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1);
+	transition: transform 250ms cubic-bezier(0.32, 0.72, 0, 1),
+		max-height 250ms cubic-bezier(0.32, 0.72, 0, 1),
+		border-radius 250ms cubic-bezier(0.32, 0.72, 0, 1);
 
 	/* Safe area padding for devices with home indicator */
 	padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -61,12 +63,45 @@
 	transform: translateY(0);
 }
 
+/* --- Dragging state — disable transitions, follow pointer --- */
+.mobile-workbench .quick-input-widget.mobile-sheet-dragging {
+	transition: none !important;
+	transform: translateY(var(--mobile-sheet-translate-y, 0)) !important;
+}
+
+/* --- Snapped to top — full viewport height --- */
+.mobile-workbench .quick-input-widget.mobile-sheet-snapped-top {
+	max-height: 100vh;
+	border-radius: 0 !important;
+}
+
+.mobile-workbench .quick-input-widget.mobile-sheet-snapped-top .quick-input-list {
+	max-height: calc(100vh - 120px);
+}
+
+.mobile-workbench .quick-input-widget.mobile-sheet-snapped-top .quick-input-list .monaco-list {
+	max-height: calc(100vh - 140px) !important;
+}
+
+.mobile-workbench .quick-input-widget.mobile-sheet-snapped-top .quick-input-tree {
+	max-height: calc(100vh - 100px);
+}
+
+.mobile-workbench .quick-input-widget.mobile-sheet-snapped-top .quick-input-tree .monaco-list {
+	max-height: calc(100vh - 140px) !important;
+}
+
 /* --- Drag handle indicator --- */
 .mobile-workbench .quick-input-widget .mobile-sheet-handle {
 	display: flex;
 	justify-content: center;
-	padding: 8px 0 4px;
+	align-items: center;
+	padding: 10px 0 6px;
+	min-height: 24px;
 	cursor: grab;
+	touch-action: none;
+	-webkit-user-select: none;
+	user-select: none;
 }
 
 .mobile-workbench .quick-input-widget .mobile-sheet-handle::after {
