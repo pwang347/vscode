@@ -19,7 +19,7 @@ export interface ISavedWorkspace {
 }
 
 /**
- * Workspace picker — shown after connecting to a server, before opening the chat.
+ * Workspace picker -- shown after connecting to a server, before opening the chat.
  * Displays saved workspaces and allows opening a folder by path.
  */
 export class WorkspacePicker extends Disposable {

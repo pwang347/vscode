@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import { $, append, addDisposableListener } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
@@ -12,7 +12,7 @@ import { localize } from '../../../nls.js';
 import { IServerInfo } from '../../services/connection/browser/connectionService.js';
 
 /**
- * Welcome page — the first screen shown to the user when not connected.
+ * Welcome page -- the first screen shown to the user when not connected.
  * Displays saved servers and a button to connect to a new one.
  */
 export class WelcomePage extends Disposable {
@@ -25,6 +25,7 @@ export class WelcomePage extends Disposable {
 
 	private container!: HTMLElement;
 	private serverListContainer!: HTMLElement;
+	private readonly itemDisposables = this._register(new DisposableStore());
 
 	constructor(parent: HTMLElement) {
 		super();
@@ -34,7 +35,7 @@ export class WelcomePage extends Disposable {
 	private create(parent: HTMLElement): void {
 		this.container = append(parent, $('.mobile-welcome-page'));
 
-		// Logo/title area — icon to the left of text
+		// Logo/title area -- icon to the left of text
 		const header = append(this.container, $('.welcome-header'));
 		const iconContainer = append(header, $('.welcome-icon'));
 		const iconSpan = append(iconContainer, $('span'));
@@ -60,6 +61,7 @@ export class WelcomePage extends Disposable {
 	}
 
 	updateServers(servers: IServerInfo[]): void {
+		this.itemDisposables.clear();
 		this.serverListContainer.textContent = '';
 		for (const server of servers) {
 			const item = append(this.serverListContainer, $('button.welcome-server-item'));
@@ -72,7 +74,7 @@ export class WelcomePage extends Disposable {
 			address.textContent = `${server.address}:${server.port}`;
 			const chevron = append(item, $('span.server-chevron'));
 			chevron.classList.add(...ThemeIcon.asClassNameArray(Codicon.chevronRight));
-			this._register(addDisposableListener(item, 'click', () => {
+			this.itemDisposables.add(addDisposableListener(item, 'click', () => {
 				// Immediate visual feedback before page reload
 				item.classList.add('loading');
 				chevron.classList.remove(...ThemeIcon.asClassNameArray(Codicon.chevronRight));

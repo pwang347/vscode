@@ -68,7 +68,7 @@ class MobileBackgroundConnectionKeeper extends Disposable implements IWorkbenchC
 						try {
 							nativeBridge.stopBackgroundService();
 						} catch {
-							// Best effort — the native side may already be torn down
+							// Best effort -- the native side may already be torn down
 						}
 					}
 				});
@@ -102,7 +102,7 @@ class MobileBackgroundConnectionKeeper extends Disposable implements IWorkbenchC
 		const visibilityEmitter = this._register(new DomEmitter(mainWindow.document, 'visibilitychange'));
 		this._register(visibilityEmitter.event(() => {
 			if (mainWindow.document.hidden) {
-				// App going to background — record the time
+				// App going to background -- record the time
 				lastHiddenTime = Date.now();
 				this.logService.info('[mobile] App entering background');
 			} else {
@@ -113,7 +113,7 @@ class MobileBackgroundConnectionKeeper extends Disposable implements IWorkbenchC
 				// If we're currently waiting to reconnect, skip the wait
 				// timer so the reconnection attempt happens immediately.
 				if (reconnectWaitEvent) {
-					this.logService.info('[mobile] Skipping reconnection wait timer — resuming immediately');
+					this.logService.info('[mobile] Skipping reconnection wait timer -- resuming immediately');
 					reconnectWaitEvent.skipWait();
 				}
 			}

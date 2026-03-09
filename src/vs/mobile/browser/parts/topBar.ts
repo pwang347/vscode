@@ -11,7 +11,7 @@ import { Codicon } from '../../../base/common/codicons.js';
 import { localize } from '../../../nls.js';
 
 /**
- * Mobile top bar — minimal bar with a hamburger button and a title.
+ * Mobile top bar -- minimal bar with a hamburger button and a title.
  * Replaces the old ConnectionBar in the chat phase.
  */
 export class TopBar extends Disposable {

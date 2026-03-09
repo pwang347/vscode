@@ -53,7 +53,7 @@ import { EditorMarkdownCodeBlockRenderer } from '../../editor/browser/widget/mar
 import { IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import { ICommandService } from '../../platform/commands/common/commands.js';
 import { MobilePhase } from './parts/parts.js';
-import { IsMobileAppContext, MobileOrientationContext, MobilePhaseContext, MobileSessionEditableContext } from '../common/contextkeys.js';
+import { IsMobileAppContext, MobileKeyboardVisibleContext, MobileOrientationContext, MobilePhaseContext, MobileSessionEditableContext } from '../common/contextkeys.js';
 import { ChatWidget } from '../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ChatAgentLocation } from '../../workbench/contrib/chat/common/constants.js';
 import { IChatModelReference, IChatService, convertLegacyChatSessionTiming } from '../../workbench/contrib/chat/common/chatService/chatService.js';
@@ -66,6 +66,7 @@ import { Drawer, DrawerAction, IChatSessionItem } from './parts/drawer.js';
 import { IConnectionService, IServerInfo } from '../services/connection/browser/connectionService.js';
 import { IHapticFeedbackService, HapticImpactStyle } from '../services/haptics/browser/hapticFeedbackService.js';
 import { IQuickInputService } from '../../platform/quickinput/common/quickInput.js';
+import { INotificationService, Severity } from '../../platform/notification/common/notification.js';
 import { localize } from '../../nls.js';
 import { URI } from '../../base/common/uri.js';
 import { CancellationToken } from '../../base/common/cancellation.js';
@@ -105,6 +106,18 @@ export interface IMobileWorkbenchOptions {
 //#endregion
 
 const SAVED_WORKSPACES_KEY = 'mobile.savedWorkspaces';
+
+/** Height of the mobile top bar in pixels. */
+const TOP_BAR_HEIGHT = 44;
+
+/** Minimum difference between window height and viewport height to consider the keyboard open (px). */
+const KEYBOARD_VIEWPORT_THRESHOLD = 150;
+
+/** Minimum difference between screen height and window height to consider keyboard open on Android (px). */
+const KEYBOARD_SCREEN_THRESHOLD = 200;
+
+/** Default fallback dimensions (iPhone-sized) for layout initialization. */
+const DEFAULT_DIMENSION = { width: 375, height: 812 };
 
 export class MobileWorkbench extends Disposable implements IWorkbenchLayoutService {
 
@@ -203,7 +216,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	}
 
 	private computeContainerOffset(): ILayoutOffsetInfo {
-		const top = this.topBar?.getHeight() ?? 44;
+		const top = this.topBar?.getHeight() ?? TOP_BAR_HEIGHT;
 		return { top, quickPickTop: top };
 	}
 
@@ -263,6 +276,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private storageService!: IStorageService;
 	private dialogService!: IDialogService;
 	private fileDialogService!: IFileDialogService;
+	private notificationService!: INotificationService;
 	private quickInputService!: IQuickInputService;
 	private workspaceContextService!: IWorkspaceContextService;
 
@@ -287,10 +301,10 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			Error.stackTraceLimit = 100;
 		}
 
-		mainWindow.addEventListener('unhandledrejection', (event) => {
+		this._register(addDisposableListener(mainWindow, 'unhandledrejection', (event: PromiseRejectionEvent) => {
 			onUnexpectedError(event.reason);
 			event.preventDefault();
-		});
+		}));
 
 		setUnexpectedErrorHandler(error => this.handleUnexpectedError(error, logService));
 	}
@@ -335,6 +349,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 				this.storageService = storageService;
 				this.dialogService = dialogService;
 				this.fileDialogService = accessor.get(IFileDialogService);
+				this.notificationService = accessor.get(INotificationService);
 
 				// Set code block renderer
 				markdownRendererService.setDefaultCodeBlockRenderer(instantiationService.createInstance(EditorMarkdownCodeBlockRenderer));
@@ -391,6 +406,13 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 		instantiationService.invokeFunction(accessor => {
 			const lifecycleService = accessor.get(ILifecycleService);
+
+			// Allow the configuration service to accept writes.
+			// Same pattern as the standard workbench (workbench.ts).
+			const configurationService = accessor.get(IConfigurationService);
+			const configWithInit = configurationService as unknown as { acquireInstantiationService?: (instantiationService: IInstantiationService) => void };
+			configWithInit.acquireInstantiationService?.(instantiationService);
+
 			lifecycleService.phase = LifecyclePhase.Ready;
 		});
 
@@ -399,13 +421,13 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 	private trackOrientation(contextKeyService: IContextKeyService): void {
 		const orientationKey = MobileOrientationContext.bindTo(contextKeyService);
+		const keyboardVisibleKey = MobileKeyboardVisibleContext.bindTo(contextKeyService);
 
 		const updateOrientation = () => {
 			orientationKey.set(mainWindow.innerWidth > mainWindow.innerHeight ? 'landscape' : 'portrait');
 		};
 		updateOrientation();
-		mainWindow.addEventListener('resize', updateOrientation);
-		this._register({ dispose: () => mainWindow.removeEventListener('resize', updateOrientation) });
+		this._register(addDisposableListener(mainWindow, 'resize', updateOrientation));
 
 		// Detect keyboard open/close and relayout.
 		// With Capacitor Keyboard.resize: 'body', Android resizes the WebView
@@ -414,26 +436,25 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		const onKeyboardChange = () => {
 			let keyboardVisible = false;
 			if (mainWindow.visualViewport) {
-				keyboardVisible = mainWindow.innerHeight - mainWindow.visualViewport.height > 150;
+				keyboardVisible = mainWindow.innerHeight - mainWindow.visualViewport.height > KEYBOARD_VIEWPORT_THRESHOLD;
 			}
 			// Fallback: if the window was resized significantly smaller than
 			// screen height, the keyboard is likely open (Android adjustResize).
 			if (!keyboardVisible && mainWindow.screen) {
-				keyboardVisible = mainWindow.screen.height - mainWindow.innerHeight > 200;
+				keyboardVisible = mainWindow.screen.height - mainWindow.innerHeight > KEYBOARD_SCREEN_THRESHOLD;
 			}
 			if (keyboardVisible !== this._keyboardVisible) {
 				this._keyboardVisible = keyboardVisible;
 				this.mainContainer.classList.toggle('keyboard-visible', keyboardVisible);
+				keyboardVisibleKey.set(keyboardVisible);
 				this.layout();
 			}
 		};
 
-		mainWindow.addEventListener('resize', onKeyboardChange);
-		this._register({ dispose: () => mainWindow.removeEventListener('resize', onKeyboardChange) });
+		this._register(addDisposableListener(mainWindow, 'resize', onKeyboardChange));
 
 		if (mainWindow.visualViewport) {
-			mainWindow.visualViewport.addEventListener('resize', onKeyboardChange);
-			this._register({ dispose: () => mainWindow.visualViewport!.removeEventListener('resize', onKeyboardChange) });
+			this._register(addDisposableListener(mainWindow.visualViewport, 'resize', onKeyboardChange));
 		}
 	}
 
@@ -524,6 +545,13 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	}
 
 	private setupTouchClickBridge(): void {
+		// Skip synthetic clicks when a screen reader may be active.
+		// Screen readers (VoiceOver, TalkBack) handle touch-to-click
+		// themselves and synthetic clicks would cause double-activation.
+		if (mainWindow.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+			return;
+		}
+
 		let touchStartTime = 0;
 		let touchStartX = 0;
 		let touchStartY = 0;
@@ -547,8 +575,10 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			const dx = Math.abs(touch.pageX - touchStartX);
 			const dy = Math.abs(touch.pageY - touchStartY);
 
-			// Only for quick taps (< 300ms, < 10px movement)
-			if (dt > 300 || dx > 10 || dy > 10) {
+			const TAP_MAX_DURATION = 300; // ms
+			const TAP_MAX_DISTANCE = 10;  // px
+
+			if (dt > TAP_MAX_DURATION || dx > TAP_MAX_DISTANCE || dy > TAP_MAX_DISTANCE) {
 				return;
 			}
 
@@ -559,7 +589,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 			// Guard: if the DOM changed between touchstart and touchend
 			// (e.g. a drawer opened), the element under the finger may be
-			// completely different.  Only dispatch the synthetic click when
+			// completely different. Only dispatch the synthetic click when
 			// the start and end targets are the same element or one
 			// contains the other.
 			if (touchStartTarget && target !== touchStartTarget &&
@@ -585,7 +615,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		}, { passive: true }));
 	}
 
-	//#region Mobile Layout — three-phase flow
+	//#region Mobile Layout -- three-phase flow
 
 	private createMobileLayout(instantiationService: IInstantiationService, contextKeyService: IContextKeyService): void {
 		const phaseKey = MobilePhaseContext.bindTo(contextKeyService);
@@ -631,8 +661,8 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		this.showPhase(this.phase, phaseKey);
 
 		// Android hardware back button handling via Capacitor App plugin.
-		// Priority: dismiss quick pick → close drawer → close editor →
-		// files→chat → chat→workspace picker → workspace picker→shell → minimize
+		// Priority: dismiss quick pick -> close drawer -> close editor ->
+		// files->chat -> chat->workspace picker -> workspace picker->shell -> minimize
 		this._register(listenMobileBackButton(() => {
 			// 1. Dismiss any open quick pick / input box
 			if (this.quickInputService.currentQuickInput) {
@@ -650,22 +680,22 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			switch (this.phase) {
 				case MobilePhase.Chat:
 					if (this._editorVisible) {
-						// Editor visible → simulate top bar back (return to originating view)
+						// Editor visible -> simulate top bar back (return to originating view)
 						this.topBar?.fireBack();
 					} else if (this._activeView === 'files') {
-						// Files → chat
+						// Files -> chat
 						this.showActiveView('chat');
 					} else {
-						// Chat → workspace picker
+						// Chat -> workspace picker
 						this.switchToWorkspacePicker();
 					}
 					break;
 				case MobilePhase.WorkspacePicker:
-					// Workspace picker → server list (shell)
+					// Workspace picker -> server list (shell)
 					this.confirmDisconnectAndNavigateToShell();
 					break;
 				case MobilePhase.Welcome:
-					// Welcome page (server list) → minimize the app
+					// Welcome page (server list) -> minimize the app
 					minimizeApp();
 					break;
 			}
@@ -746,20 +776,20 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		// Drawer (overlays entire workbench)
 		this.drawer = this._register(instantiationService.createInstance(Drawer, this.mainContainer));
 
-		// Wire up top bar → drawer
+		// Wire up top bar -> drawer
 		this._register(this.topBar.onDidPressMenu(() => {
 			this.drawer?.toggle();
 		}));
 
-		// Wire up top bar back button — navigate back through the stack:
-		// editor → originating view (chat or files) → chat
+		// Wire up top bar back button -- navigate back through the stack:
+		// editor -> originating view (chat or files) -> chat
 		this._register(this.topBar.onDidPressBack(() => {
 			if (this._editorVisible) {
 				// Close editor, return to the view that opened it
 				const returnTo = this._editorOpenedFrom;
 				this.hideEditorOverlay();
 				if (returnTo === 'chat') {
-					// Restore chat directly — _activeView is already 'chat'
+					// Restore chat directly -- _activeView is already 'chat'
 					// so showActiveView would early-return
 					this.chatViewContainer.style.display = '';
 					this.topBar?.setTitle(this.chatWidget?.viewModel?.model.title || localize('newChat', "New Chat"));
@@ -789,7 +819,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			this._register(this.chatService.onDidDisposeSession(() => this.refreshDrawerSessions()));
 		}
 
-		// Wire up footer navigation — change server / workspace
+		// Wire up footer navigation -- change server / workspace
 		// Enable if session is editable, or if running inside the native
 		// mobile app (where tapping the connection info returns to the
 		// native shell's server list regardless of editability).
@@ -927,9 +957,10 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	private openWorkspace(path: string, remoteAuthority: string): void {
 		this.saveWorkspace(path);
 
-		// If the selected workspace is already the current one, just switch
-		// back to the chat phase without reloading.
-		if (this._activeWorkspacePath && this._activeWorkspacePath === path) {
+		// If the selected workspace is already the current one on the same server,
+		// just switch back to the chat phase without reloading.
+		const currentAuthority = new URLSearchParams(mainWindow.location.search).get('remoteAuthority') || this.getConfigRemoteAuthority();
+		if (this._activeWorkspacePath && this._activeWorkspacePath === path && currentAuthority === remoteAuthority) {
 			this.showPhase(MobilePhase.Chat, this.phaseKey);
 			return;
 		}
@@ -1101,7 +1132,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		if (!partContainer) {
 			return;
 		}
-		const topBarHeight = this.topBar?.getHeight() ?? 44;
+		const topBarHeight = this.topBar?.getHeight() ?? TOP_BAR_HEIGHT;
 		const width = this._mainContainerDimension.width;
 		const height = this._mainContainerDimension.height - topBarHeight;
 		if (width > 0 && height > 0) {
@@ -1149,6 +1180,10 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			this._filesViewReady = true;
 		} catch (err) {
 			console.error('[mobile] initFilesView error:', err);
+			this.notificationService.notify({
+				severity: Severity.Error,
+				message: localize('filesViewFailed', "Failed to initialize file explorer: {0}", String(err)),
+			});
 		}
 	}
 
@@ -1160,13 +1195,13 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		if (!sidebarPart) {
 			return;
 		}
-		// Skip layout if the part hasn't been create()'d yet — initFilesView
+		// Skip layout if the part hasn't been create()'d yet -- initFilesView
 		// will call layoutFilesView again after creating the sidebar.
 		const partContainer = sidebarPart.getContainer();
 		if (!partContainer) {
 			return;
 		}
-		const topBarHeight = this.topBar?.getHeight() ?? 44;
+		const topBarHeight = this.topBar?.getHeight() ?? TOP_BAR_HEIGHT;
 		const width = this._mainContainerDimension.width;
 		const height = this._mainContainerDimension.height - topBarHeight;
 		if (width > 0 && height > 0) {
@@ -1211,7 +1246,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			chatWidget.setVisible(true);
 			this.chatWidget = chatWidget;
 
-			// Haptic feedback + "sending" state on send — fires immediately when
+			// Haptic feedback + "sending" state on send -- fires immediately when
 			// the user taps send, before the async submission pipeline.
 			const hapticService = instantiationService.invokeFunction(accessor => {
 				try { return accessor.get(IHapticFeedbackService); } catch { return undefined; }
@@ -1237,9 +1272,17 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 				setTimeout(() => this.layoutChatWidget(), 200);
 			});
 		} catch (error) {
-			const errorMsg = append(container, $('.mobile-chat-error'));
-			errorMsg.textContent = `Chat: ${error}`;
-			errorMsg.style.cssText = 'padding:20px;color:var(--vscode-errorForeground,#f48771);font-size:13px;word-break:break-word;';
+			try {
+				const notificationService = instantiationService.invokeFunction(accessor => accessor.get(INotificationService));
+				notificationService.notify({
+					severity: Severity.Error,
+					message: localize('chatCreateFailed', "Failed to initialize chat: {0}", String(error)),
+				});
+			} catch {
+				// Notification service may not be ready -- fall back to DOM
+				const errorMsg = append(container, $('.mobile-chat-error'));
+				errorMsg.textContent = localize('chatError', "Chat: {0}", String(error));
+			}
 			console.error('[mobile] Failed to create ChatWidget:', error);
 		}
 	}
@@ -1248,7 +1291,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 
 
-	//#region Tab Navigation — replaced by drawer
+	//#region Tab Navigation -- replaced by drawer
 
 	private restore(lifecycleService: ILifecycleService): void {
 		mark('code/didStartWorkbench');
@@ -1295,11 +1338,11 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 		// Force ViewsService instantiation so it populates the
 		// PaneCompositeRegistry with built-in view containers (explorer, etc.).
-		// ViewsService is Eager but behind a proxy — calling a method forces
+		// ViewsService is Eager but behind a proxy -- calling a method forces
 		// construction which then registers all view container descriptors.
 		accessor.get(IViewsService);
 
-		// Handle editor opens — show editor overlay on top of the current view.
+		// Handle editor opens -- show editor overlay on top of the current view.
 		// initEditorPart() is called lazily inside showEditorOverlay() so the
 		// editor part DOM is created on first use, avoiding auto-restored
 		// welcome/walkthrough editors at startup.
@@ -1309,7 +1352,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 			}
 		}));
 
-		this._mainContainerDimension = getClientArea(this.parent, new Dimension(375, 812)); // iPhone-sized default
+		this._mainContainerDimension = getClientArea(this.parent, new Dimension(DEFAULT_DIMENSION.width, DEFAULT_DIMENSION.height));
 	}
 
 	//#endregion
@@ -1344,7 +1387,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 		if (!this.chatWidget || this.phase !== MobilePhase.Chat) {
 			return;
 		}
-		const topBarHeight = this.topBar?.getHeight() ?? 44;
+		const topBarHeight = this.topBar?.getHeight() ?? TOP_BAR_HEIGHT;
 		const width = this._mainContainerDimension.width;
 		const height = this._mainContainerDimension.height - topBarHeight;
 		if (width > 0 && height > 0) {
@@ -1435,7 +1478,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 
 	//#endregion
 
-	//#region Part Visibility — simplified for mobile
+	//#region Part Visibility -- simplified for mobile
 
 	isActivityBarHidden(): boolean {
 		return true;
@@ -1499,7 +1542,7 @@ export class MobileWorkbench extends Disposable implements IWorkbenchLayoutServi
 	}
 
 	setSize(_part: Parts, _size: IViewSize): void {
-		// No-op — mobile layout is not resizable
+		// No-op -- mobile layout is not resizable
 	}
 
 	resizePart(_part: Parts, _sizeChangeWidth: number, _sizeChangeHeight: number): void {

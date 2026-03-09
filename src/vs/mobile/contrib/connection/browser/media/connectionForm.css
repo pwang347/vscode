@@ -1,0 +1,130 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* ---- Connection Form Overlay ---- */
+
+.mobile-connection-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 10000;
+	background: var(--vscode-editor-background);
+	color: var(--vscode-editor-foreground);
+	display: flex;
+	flex-direction: column;
+	padding: 20px;
+	font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+}
+
+.mobile-connection-overlay .connection-form-title {
+	margin: 0 0 16px;
+	font-size: 20px;
+	font-weight: 600;
+}
+
+.mobile-connection-overlay .connection-form-error {
+	display: none;
+	padding: 10px;
+	margin-bottom: 12px;
+	background: var(--vscode-inputValidation-errorBackground, rgba(244, 135, 113, 0.2));
+	border: 1px solid var(--vscode-inputValidation-errorBorder, #f48771);
+	border-radius: 6px;
+	font-size: 13px;
+	color: var(--vscode-errorForeground);
+}
+
+.mobile-connection-overlay .connection-form-section-label {
+	font-size: 13px;
+	font-weight: 600;
+	margin-bottom: 8px;
+	opacity: 0.7;
+}
+
+.mobile-connection-overlay .connection-form-saved-server {
+	display: block;
+	width: 100%;
+	padding: 12px;
+	margin-bottom: 8px;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 6px;
+	font-size: 15px;
+	text-align: left;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mobile-connection-overlay .connection-form-saved-server:active {
+	opacity: 0.8;
+}
+
+.mobile-connection-overlay .connection-form-separator {
+	border: none;
+	border-top: 1px solid var(--vscode-input-border, transparent);
+	margin: 12px 0;
+}
+
+.mobile-connection-overlay .connection-form-label {
+	display: block;
+	font-size: 13px;
+	margin-bottom: 4px;
+	opacity: 0.8;
+}
+
+.mobile-connection-overlay .connection-form-input {
+	display: block;
+	width: 100%;
+	padding: 10px 12px;
+	margin-bottom: 12px;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 6px;
+	font-size: 16px;
+	box-sizing: border-box;
+	outline: none;
+}
+
+.mobile-connection-overlay .connection-form-input:focus {
+	border-color: var(--vscode-focusBorder);
+}
+
+.mobile-connection-overlay .connection-form-button-row {
+	display: flex;
+	gap: 10px;
+	margin-top: 4px;
+}
+
+.mobile-connection-overlay .connection-form-cancel {
+	flex: 1;
+	padding: 12px;
+	background: var(--vscode-button-secondaryBackground);
+	color: var(--vscode-button-secondaryForeground);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 6px;
+	font-size: 16px;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mobile-connection-overlay .connection-form-connect {
+	flex: 1;
+	padding: 12px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: none;
+	border-radius: 6px;
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.mobile-connection-overlay .connection-form-cancel:active,
+.mobile-connection-overlay .connection-form-connect:active {
+	opacity: 0.8;
+}

@@ -17,6 +17,9 @@
 		<!-- Disable pinch zooming, lock viewport for mobile -->
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
+		<!-- Content Security Policy -->
+		<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:; connect-src 'self' ws: wss: https: http:; worker-src 'self' blob:; frame-src 'self' https:;" />
+
 		<!-- Theme color for browser chrome -->
 		<meta name="theme-color" content="#ffffff" />
 
@@ -35,7 +38,6 @@
 			/* Critical CSS to prevent FOUC and set safe area insets */
 			html, body {
 				margin: 0;
-				padding: 0;
 				width: 100%;
 				height: 100%;
 				overflow: hidden;
@@ -68,6 +70,16 @@
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 				color: #616161;
 			}
+			@media (prefers-color-scheme: dark) {
+				.mobile-loading-splash {
+					background: #1e1e1e;
+					color: #cccccc;
+				}
+				.mobile-loading-splash .spinner {
+					border-color: #444444;
+					border-top-color: #007acc;
+				}
+			}
 			.mobile-loading-splash .spinner {
 				width: 32px; height: 32px;
 				border: 3px solid #cecece;
@@ -85,7 +97,7 @@
 		</style>
 	</head>
 
-	<body aria-label="">
+	<body aria-label="VS Code Mobile">
 		<div id="mobile-loading-splash" class="mobile-loading-splash">
 			<div class="spinner"></div>
 			<p id="mobile-loading-msg">Loading...</p>

@@ -34,9 +34,9 @@ interface IMobileNativeBridge {
  * rather than the system browser or `window.open()`.
  *
  * Uses two strategies depending on what's available:
- * 1. **Capacitor Browser plugin** — available when the Capacitor bridge is
+ * 1. **Capacitor Browser plugin** -- available when the Capacitor bridge is
  *    injected (e.g. when serving from local webDir).
- * 2. **MobileNative JS bridge** — injected by the native app via
+ * 2. **MobileNative JS bridge** -- injected by the native app via
  *    `addJavascriptInterface`, persists across navigations. Used when the
  *    WebView has navigated to a remote code server where Capacitor plugins
  *    may not be available.

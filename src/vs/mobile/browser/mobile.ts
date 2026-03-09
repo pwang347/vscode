@@ -21,7 +21,7 @@ import { MobileWorkbench, IMobileWorkbenchOptions } from './workbench.js';
 import { MobileURLCallbackProvider } from '../services/url/browser/mobileUrlCallbackProvider.js';
 import type { ISecretStorageProvider } from '../../platform/secrets/common/secrets.js';
 
-// Import mobile entry point — brings in the full web workbench
+// Import mobile entry point -- brings in the full web workbench
 // services plus mobile-specific services and contributions.
 import '../mobile.web.main.js';
 
@@ -144,21 +144,32 @@ class MobileBrowserMain extends BrowserMain {
 		// Mark workbench as open
 		mark('code/didStartWorkbench');
 
-		// The mobile workbench doesn't return the IWorkbench facade —
+		// The mobile workbench doesn't return the IWorkbench facade --
 		// it runs as a standalone app (no embedder API needed).
 		return new Promise(() => { /* keep alive */ });
 	}
 }
 
 /**
- * WebSocket factory that forces ws:// instead of wss://.
- * Capacitor serves from https://localhost, so the default factory
- * would use wss://, but dev VS Code servers use plain ws://.
+ * WebSocket factory for mobile remote connections.
+ *
+ * Capacitor serves from https://localhost, so the default factory picks wss://.
+ * For local dev servers (localhost/127.0.0.1), we downgrade to ws://. For all
+ * other hosts, wss:// is preserved so traffic is encrypted in transit.
  */
 function createMobileWebSocketFactory(): IWebSocketFactory {
 	return {
 		create(url: string, debugLabel: string): IWebSocket {
-			const wsUrl = url.replace(/^wss:\/\//, 'ws://');
+			// Only downgrade to ws:// for localhost dev servers
+			let wsUrl = url;
+			try {
+				const parsed = new URL(url);
+				if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+					wsUrl = url.replace(/^wss:\/\//, 'ws://');
+				}
+			} catch {
+				// If URL parsing fails, leave as-is
+			}
 			const socket = new WebSocket(wsUrl);
 
 			const onData = new Emitter<ArrayBuffer>();
@@ -185,54 +196,100 @@ function createMobileWebSocketFactory(): IWebSocketFactory {
 }
 
 /**
- * Persists secrets (auth tokens) in localStorage so the user doesn't have
- * to re-authenticate on every page load. Uses transparent (no-op) encryption
- * since we're in a sandboxed WebView — there is no OS keychain available.
+ * Native JS bridge for secure storage, injected by the Android app via
+ * `WebView.addJavascriptInterface("MobileNative", ...)`.
+ *
+ * Unlike Capacitor plugins, this bridge persists across WebView navigations
+ * because `addJavascriptInterface` objects survive page loads. This makes it
+ * the only reliable secure storage option since the WebView navigates to a
+ * remote server page where Capacitor plugins are not available.
+ *
+ * The native side delegates to EncryptedSharedPreferences (Android Keystore)
+ * or Keychain (iOS).
+ */
+interface IMobileNativeSecureStorage {
+	secureStorageGet(key: string): string | null;
+	secureStorageSet(key: string, value: string): void;
+	secureStorageRemove(key: string): void;
+	secureStorageKeys(): string; // JSON-encoded string[]
+}
+
+/**
+ * Secret storage provider for mobile.
+ *
+ * Uses the `MobileNative` JS bridge injected via `addJavascriptInterface`.
+ * This bridge persists across WebView navigations, so it works on both the
+ * local Capacitor shell and remote server pages. The native side delegates
+ * to Android Keystore (EncryptedSharedPreferences) or iOS Keychain.
+ *
+ * If the bridge is not available (e.g. running in a plain browser), secrets
+ * are stored **in-memory only** and lost on page reload.
  */
 class MobileSecretStorageProvider implements ISecretStorageProvider {
 
-	private static readonly STORAGE_KEY = 'mobile.secrets';
+	type: 'persisted' | 'in-memory';
 
-	type = 'persisted' as const;
-
-	private readonly _secrets: Promise<Record<string, string>>;
+	private readonly _bridge: IMobileNativeSecureStorage | undefined;
+	private readonly _memoryStore = new Map<string, string>();
 
 	constructor() {
-		this._secrets = this._load();
-	}
-
-	private async _load(): Promise<Record<string, string>> {
-		const raw = localStorage.getItem(MobileSecretStorageProvider.STORAGE_KEY);
-		if (raw) {
-			try {
-				return JSON.parse(raw);
-			} catch {
-				localStorage.removeItem(MobileSecretStorageProvider.STORAGE_KEY);
-			}
+		this._bridge = this._getNativeBridge();
+		this.type = this._bridge ? 'persisted' : 'in-memory';
+		if (!this._bridge) {
+			console.warn('[mobile] MobileNative secure storage bridge not available. '
+				+ 'Secrets will be kept in-memory only and lost on reload.');
 		}
-		return {};
-	}
-
-	private async _save(): Promise<void> {
-		localStorage.setItem(MobileSecretStorageProvider.STORAGE_KEY, JSON.stringify(await this._secrets));
 	}
 
 	async get(key: string): Promise<string | undefined> {
-		return (await this._secrets)[key];
+		if (this._bridge) {
+			try {
+				return this._bridge.secureStorageGet(key) ?? undefined;
+			} catch {
+				return undefined;
+			}
+		}
+		return this._memoryStore.get(key);
 	}
 
 	async set(key: string, value: string): Promise<void> {
-		(await this._secrets)[key] = value;
-		await this._save();
+		if (this._bridge) {
+			this._bridge.secureStorageSet(key, value);
+			return;
+		}
+		this._memoryStore.set(key, value);
 	}
 
 	async delete(key: string): Promise<void> {
-		delete (await this._secrets)[key];
-		await this._save();
+		if (this._bridge) {
+			try { this._bridge.secureStorageRemove(key); } catch { /* key may not exist */ }
+			return;
+		}
+		this._memoryStore.delete(key);
 	}
 
 	async keys(): Promise<string[]> {
-		return Object.keys(await this._secrets);
+		if (this._bridge) {
+			try {
+				return JSON.parse(this._bridge.secureStorageKeys());
+			} catch {
+				return [];
+			}
+		}
+		return [...this._memoryStore.keys()];
+	}
+
+	private _getNativeBridge(): IMobileNativeSecureStorage | undefined {
+		try {
+			const bridge = (globalThis as Record<string, unknown>).MobileNative as
+				IMobileNativeSecureStorage | undefined;
+			if (bridge && typeof bridge.secureStorageGet === 'function') {
+				return bridge;
+			}
+			return undefined;
+		} catch {
+			return undefined;
+		}
 	}
 }
 
@@ -265,12 +322,9 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 		workspaceProvider,
 		remoteAuthority: remoteAuthority || undefined,
 		connectionToken: connectionToken || undefined,
-		// Force ws:// for remote connections. Capacitor serves the app from
-		// https://localhost, so the default factory picks wss://, but the
-		// VS Code dev server runs plain HTTP/WS.
+		// Force ws:// for localhost dev servers, wss:// for all other hosts (including in production) --- see createMobileWebSocketFactory
 		webSocketFactory: remoteAuthority ? createMobileWebSocketFactory() : undefined,
-		// Persist auth tokens (GitHub, etc.) in localStorage so the user
-		// doesn't have to re-authenticate on every page load / navigation.
+		// Persist auth tokens (GitHub, etc.) in secure storage on mobile, using the MobileNative JS bridge.
 		secretStorageProvider: new MobileSecretStorageProvider(),
 		// Enable OAuth callback flow on mobile. The MobileURLCallbackProvider
 		// listens for deep-link URL opens from the Capacitor App plugin,
@@ -279,36 +333,8 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 		productConfiguration: {
 			...product,
 			...config.productConfiguration,
-			// The OSS product.json doesn't include extensionsGallery.
-			// For the mobile app to install extensions (e.g. GitHub Copilot Chat
-			// during the sign-in setup flow), we need the VS Marketplace config.
-			// The server may provide it via config; fall back to the public gallery.
 			extensionsGallery: config.productConfiguration?.extensionsGallery ?? product.extensionsGallery,
-			// The OSS product.json doesn't include extensionEnabledApiProposals.
-			// Copilot extensions require proposed API access to register chat
-			// participants and use private APIs. Merge from server config or
-			// provide the required proposals for Copilot.
-			extensionEnabledApiProposals: config.productConfiguration?.extensionEnabledApiProposals ?? product.extensionEnabledApiProposals ?? {
-				'GitHub.copilot': [
-					'inlineCompletionsAdditions', 'interactive', 'terminalDataWriteEvent', 'devDeviceId'
-				],
-				'GitHub.copilot-chat': [
-					'interactive', 'terminalDataWriteEvent', 'terminalExecuteCommandEvent', 'terminalSelection',
-					'terminalQuickFixProvider', 'chatParticipantAdditions', 'defaultChatParticipant', 'embeddings',
-					'chatProvider', 'mappedEditsProvider', 'aiRelatedInformation', 'aiSettingsSearch',
-					'codeActionAI', 'findTextInFiles', 'findTextInFiles2', 'textSearchProvider', 'textSearchProvider2',
-					'activeComment', 'commentReveal', 'contribSourceControlInputBoxMenu',
-					'contribCommentThreadAdditionalMenu', 'contribCommentsViewThreadMenus',
-					'newSymbolNamesProvider', 'findFiles2', 'chatReferenceDiagnostic', 'extensionsAny',
-					'authLearnMore', 'testObserver', 'aiTextSearchProvider', 'documentFiltersExclusive',
-					'chatParticipantPrivate', 'contribDebugCreateConfiguration', 'inlineCompletionsAdditions',
-					'chatReferenceBinaryData', 'languageModelSystem', 'languageModelCapabilities',
-					'languageModelThinkingPart', 'chatStatusItem', 'taskProblemMatcherStatus',
-					'contribLanguageModelToolSets', 'textDocumentChangeReason', 'resolvers',
-					'taskExecutionTerminal', 'dataChannels', 'chatSessionsProvider', 'devDeviceId',
-					'contribEditorContentMenu'
-				],
-			},
+			extensionEnabledApiProposals: config.productConfiguration?.extensionEnabledApiProposals ?? product.extensionEnabledApiProposals,
 		},
 		// Configuration defaults applied before the config service is ready.
 		// Use this for settings that must be active from startup without
@@ -327,12 +353,22 @@ class MobileSecretStorageProvider implements ISecretStorageProvider {
 			// Mobile uses its own welcome page and chat-first flow; suppress the
 			// built-in welcome editor that would otherwise open on startup.
 			'workbench.startupEditor': 'none',
+			// Mobile-optimized editor defaults
+			'editor.minimap.enabled': false,
+			'editor.wordWrap': 'on',
+			'editor.lineNumbers': 'on',
+			'editor.fontSize': 16,
+			'editor.glyphMargin': false,
+			'editor.folding': true,
+			'editor.scrollBeyondLastLine': false,
+			'workbench.editor.showTabs': 'none',
+			'terminal.integrated.fontSize': 15,
 		}
 	};
 
 	// Build mobile workbench options with external session info.
 	// When the web browser provides remoteAuthority via URL or server config,
-	// the session is forced (non-editable) — the user cannot change the server.
+	// the session is forced (non-editable) -- the user cannot change the server.
 	// On the mobile app shell, the native side manages connections and can
 	// pass session info with editable=true to allow the user to switch servers.
 	let mobileOptions: IMobileWorkbenchOptions | undefined;

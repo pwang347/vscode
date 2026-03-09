@@ -44,7 +44,7 @@ export interface IConnectionService {
 
 	/**
 	 * Connect to a remote VS Code server.
-	 * The connection happens over the Tailscale VPN —
+	 * The connection happens over the Tailscale VPN --
 	 * the mobile device and server must both be on the same Tailnet.
 	 */
 	connect(server: IServerInfo): Promise<void>;
@@ -82,7 +82,7 @@ const LAST_SERVER_KEY = 'mobile.lastServer';
  * 3. The app connects using the standard VS Code remote protocol (WebSocket)
  * 4. Authentication uses VS Code server connection tokens
  *
- * No Tailscale SDK is embedded — Tailscale runs as a separate VPN on the device.
+ * No Tailscale SDK is embedded -- Tailscale runs as a separate VPN on the device.
  */
 export class ConnectionService extends Disposable implements IConnectionService {
 
@@ -129,7 +129,7 @@ export class ConnectionService extends Disposable implements IConnectionService 
 			this.saveServer(server);
 
 			// Check if we already have the correct remoteAuthority in the URL.
-			// If so, just update the status — no reload needed.
+			// If so, just update the status -- no reload needed.
 			const currentParams = new URLSearchParams(mainWindow.location.search);
 			const desiredAuthority = `${server.address}:${server.port}`;
 			if (currentParams.get('remoteAuthority') === desiredAuthority) {
@@ -147,9 +147,10 @@ export class ConnectionService extends Disposable implements IConnectionService 
 				params.set('connectionToken', server.connectionToken);
 			}
 			mainWindow.location.search = params.toString();
-		} catch {
+		} catch (err) {
 			this.setStatus('disconnected');
-			throw new Error(`Failed to connect to ${server.address}:${server.port}`);
+			const message = `Failed to connect to ${server.address}:${server.port}`;
+			throw new Error(message, { cause: err });
 		}
 	}
 

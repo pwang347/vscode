@@ -592,6 +592,11 @@
 	-webkit-overflow-scrolling: touch;
 	padding-top: env(safe-area-inset-top);
 	padding-bottom: env(safe-area-inset-bottom);
+	outline: none !important;
+}
+
+.mobile-workbench .drawer-panel:focus {
+	outline: none !important;
 }
 
 .mobile-workbench .mobile-drawer.open .drawer-panel {
@@ -619,7 +624,14 @@
 	font-size: 15px;
 	cursor: pointer;
 	text-align: left;
+	outline: none;
 	-webkit-tap-highlight-color: transparent;
+}
+
+/* Show focus ring only for keyboard navigation, not programmatic focus */
+.mobile-workbench .drawer-action-item:focus-visible {
+	outline: 1px solid var(--vscode-focusBorder);
+	outline-offset: -1px;
 }
 
 .mobile-workbench .drawer-action-item:active {
@@ -1203,3 +1215,12 @@
 }
 
 /* Quick pick is now styled via mobileQuickInput.css as a bottom sheet */
+
+/* ---- Chat Error Message ---- */
+
+.mobile-workbench .mobile-chat-error {
+	padding: 20px;
+	color: var(--vscode-errorForeground);
+	font-size: 13px;
+	word-break: break-word;
+}

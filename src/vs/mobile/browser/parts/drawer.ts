@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Disposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../base/common/lifecycle.js';
 import { $, append, addDisposableListener, getWindow, isHTMLElement } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
@@ -22,7 +22,7 @@ export interface IChatSessionItem {
 export type DrawerAction = 'newChat' | 'files';
 
 /**
- * Mobile drawer — slides in from the left, provides navigation actions,
+ * Mobile drawer -- slides in from the left, provides navigation actions,
  * chat session list, and connection/workspace info.
  */
 export class Drawer extends Disposable {
@@ -49,7 +49,10 @@ export class Drawer extends Disposable {
 	private connectionInfoLabel!: HTMLElement;
 	private workspaceInfoLabel!: HTMLElement;
 	private _isOpen = false;
-
+	private _closeTimeout: ReturnType<typeof setTimeout> | undefined;
+	private readonly sessionDisposables = this._register(new DisposableStore());
+	private readonly _focusableElements: HTMLElement[] = [];
+	private readonly _focusTrapListener = this._register(new MutableDisposable());
 
 	private readonly drawerOpenKey;
 
@@ -69,6 +72,9 @@ export class Drawer extends Disposable {
 	private create(parent: HTMLElement): void {
 		this.container = append(parent, $('.mobile-drawer'));
 		this.container.style.display = 'none';
+		this.container.setAttribute('role', 'dialog');
+		this.container.setAttribute('aria-modal', 'true');
+		this.container.setAttribute('aria-label', localize('drawerLabel', "Navigation Drawer"));
 
 		// Backdrop (tap to close)
 		this.backdrop = append(this.container, $('.drawer-backdrop'));
@@ -76,6 +82,9 @@ export class Drawer extends Disposable {
 
 		// Sliding panel
 		this.panel = append(this.container, $('.drawer-panel'));
+		this.panel.setAttribute('role', 'navigation');
+		this.panel.setAttribute('tabindex', '-1');
+		this.panel.setAttribute('aria-label', localize('drawerNavigation', "Mobile Navigation"));
 
 		// Actions section
 		const actionsSection = append(this.panel, $('.drawer-section.drawer-actions'));
@@ -96,11 +105,13 @@ export class Drawer extends Disposable {
 		// Footer: connection + workspace info (clickable to switch)
 		const footer = append(this.panel, $('.drawer-section.drawer-footer'));
 		this.connectionInfoLabel = append(footer, $('button.drawer-footer-item.connection-info'));
+		this._focusableElements.push(this.connectionInfoLabel);
 		this._register(addDisposableListener(this.connectionInfoLabel, 'click', () => {
 			this.close();
 			this._onDidPressConnection.fire();
 		}));
 		this.workspaceInfoLabel = append(footer, $('button.drawer-footer-item.workspace-info'));
+		this._focusableElements.push(this.workspaceInfoLabel);
 		this._register(addDisposableListener(this.workspaceInfoLabel, 'click', () => {
 			this.close();
 			this._onDidPressWorkspace.fire();
@@ -118,9 +129,11 @@ export class Drawer extends Disposable {
 			this._onDidSelectAction.fire(action);
 			this.close();
 		}));
+		this._focusableElements.push(item);
 	}
 
 	updateSessions(sessions: IChatSessionItem[]): void {
+		this.sessionDisposables.clear();
 		this.sessionListContainer.textContent = '';
 		for (const session of sessions) {
 			const item = append(this.sessionListContainer, $('button.drawer-session-item'));
@@ -128,7 +141,7 @@ export class Drawer extends Disposable {
 			icon.classList.add(...ThemeIcon.asClassNameArray(Codicon.comment));
 			const label = append(item, $('span.session-label'));
 			label.textContent = session.title;
-			this._register(addDisposableListener(item, 'click', () => {
+			this.sessionDisposables.add(addDisposableListener(item, 'click', () => {
 				this._onDidSelectSession.fire(session.sessionId);
 				this.close();
 			}));
@@ -204,6 +217,33 @@ export class Drawer extends Disposable {
 		void this.container.offsetHeight;
 		this.container.classList.add('open');
 		this.drawerOpenKey.set(true);
+
+		// Focus trap: trap Tab/Shift+Tab within the drawer panel
+		this._focusTrapListener.value = addDisposableListener(this.container, 'keydown', (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				this.close();
+				return;
+			}
+			if (e.key !== 'Tab') {
+				return;
+			}
+			const focusable = this._focusableElements.filter(el => el.offsetParent !== null);
+			if (focusable.length === 0) {
+				return;
+			}
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			if (e.shiftKey && getWindow(this.container).document.activeElement === first) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && getWindow(this.container).document.activeElement === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		});
+
+		// Move focus into the drawer panel (not a button, to avoid visible outline)
+		this.panel.focus();
 	}
 
 	close(): void {
@@ -213,16 +253,26 @@ export class Drawer extends Disposable {
 		this._isOpen = false;
 		this.container.classList.remove('open');
 		this.drawerOpenKey.set(false);
+		this._focusTrapListener.clear();
+		// Clear any pending close timeout from a previous close
+		if (this._closeTimeout !== undefined) {
+			clearTimeout(this._closeTimeout);
+			this._closeTimeout = undefined;
+		}
 		// Wait for transition to finish, then hide the container
 		const onEnd = () => {
 			this.container.removeEventListener('transitionend', onEnd);
+			if (this._closeTimeout !== undefined) {
+				clearTimeout(this._closeTimeout);
+				this._closeTimeout = undefined;
+			}
 			if (!this._isOpen) {
 				this.container.style.display = 'none';
 			}
 		};
 		this.container.addEventListener('transitionend', onEnd);
 		// Fallback in case transitionend doesn't fire
-		setTimeout(onEnd, 350);
+		this._closeTimeout = setTimeout(onEnd, 350);
 		this._onDidClose.fire();
 	}
 

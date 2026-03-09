@@ -5,6 +5,7 @@
 
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { mainWindow } from '../../../../base/browser/window.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
@@ -70,21 +71,28 @@ interface IMobileNativeHapticsBridge {
  * via the Capacitor plugin registry on globalThis.
  * In a web context (browser testing), haptics are no-ops.
  *
- * The service respects the system "reduce motion" accessibility setting —
+ * The service respects the system "reduce motion" accessibility setting --
  * when enabled, all haptic methods become no-ops.
  */
 export class HapticFeedbackService extends Disposable implements IHapticFeedbackService {
 
 	declare readonly _serviceBrand: undefined;
 
-	private readonly prefersReducedMotion: boolean;
+	private _prefersReducedMotion: boolean;
 
 	constructor() {
 		super();
 
-		// Respect system accessibility setting
-		this.prefersReducedMotion = typeof mainWindow.matchMedia !== 'undefined' &&
-			mainWindow.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		// Respect system accessibility setting and react to changes
+		const mql = typeof mainWindow.matchMedia !== 'undefined'
+			? mainWindow.matchMedia('(prefers-reduced-motion: reduce)')
+			: undefined;
+		this._prefersReducedMotion = mql?.matches ?? false;
+		if (mql) {
+			this._register(addDisposableListener(mql, 'change', () => {
+				this._prefersReducedMotion = mql.matches;
+			}));
+		}
 	}
 
 	private getHapticsPlugin(): ICapacitorHaptics | undefined {
@@ -106,7 +114,7 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 	}
 
 	async impact(style: HapticImpactStyle): Promise<void> {
-		if (this.prefersReducedMotion) {
+		if (this._prefersReducedMotion) {
 			return;
 		}
 
@@ -131,7 +139,7 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 	}
 
 	async notification(type: HapticNotificationType): Promise<void> {
-		if (this.prefersReducedMotion) {
+		if (this._prefersReducedMotion) {
 			return;
 		}
 
@@ -146,7 +154,7 @@ export class HapticFeedbackService extends Disposable implements IHapticFeedback
 	}
 
 	async selectionChanged(): Promise<void> {
-		if (this.prefersReducedMotion) {
+		if (this._prefersReducedMotion) {
 			return;
 		}
 

@@ -7,18 +7,8 @@
  * Parts specific to the mobile workbench.
  */
 export const enum MobileParts {
-	CONNECTION_BAR = 'workbench.parts.mobile.connectionBar',
-	NAVIGATION_BAR = 'workbench.parts.mobile.navigationBar',
 	TOP_BAR = 'workbench.parts.mobile.topBar',
 	DRAWER = 'workbench.parts.mobile.drawer',
-}
-
-/**
- * Navigation tabs available in the mobile workbench.
- */
-export const enum MobileTab {
-	Chat = 'chat',
-	Files = 'files',
 }
 
 /**

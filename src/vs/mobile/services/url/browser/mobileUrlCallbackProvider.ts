@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI, UriComponents } from '../../../../base/common/uri.js';
 import type { IURLCallbackProvider } from '../../../../workbench/services/url/browser/urlService.js';
 
@@ -64,27 +64,37 @@ export class MobileURLCallbackProvider extends Disposable implements IURLCallbac
 	private _registerAppUrlListener(): void {
 		const appPlugin = this._getAppPlugin();
 		if (appPlugin) {
-			appPlugin.addListener('appUrlOpen', (data: { url: string }) => {
+			const listenerPromise = appPlugin.addListener('appUrlOpen', (data: { url: string }) => {
 				try {
 					const uri = URI.parse(data.url);
 					this._onCallback.fire(uri);
 				} catch {
-					// Malformed URL — ignore
+					// Malformed URL -- ignore
 				}
 			});
+			this._register(toDisposable(() => {
+				listenerPromise.then(handle => handle.remove());
+			}));
 		}
 
-		// Also register a window-level callback that the native app can invoke
+		// Register a window-level callback that the native app can invoke
 		// directly via WebView.evaluateJavascript. This handles the case where
 		// the Capacitor App plugin isn't active on a server-served page.
-		(globalThis as Record<string, unknown>).__mobileUrlCallback = (url: string) => {
+		// Scoped under a namespace to reduce global collision risk.
+		const callbackFn = (url: string) => {
 			try {
 				const uri = URI.parse(url);
 				this._onCallback.fire(uri);
 			} catch {
-				// Malformed URL — ignore
+				// Malformed URL -- ignore
 			}
 		};
+		(globalThis as Record<string, unknown>).__mobileUrlCallback = callbackFn;
+		this._register(toDisposable(() => {
+			if ((globalThis as Record<string, unknown>).__mobileUrlCallback === callbackFn) {
+				delete (globalThis as Record<string, unknown>).__mobileUrlCallback;
+			}
+		}));
 	}
 
 	/**

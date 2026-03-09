@@ -10,7 +10,7 @@ import { IWorkbenchLayoutService, Parts } from '../../../../workbench/services/l
 import { mainWindow } from '../../../../base/browser/window.js';
 
 /**
- * Mobile layout contribution — hides desktop-only chrome when
+ * Mobile layout contribution -- hides desktop-only chrome when
  * connected to a remote server. Navigation is handled by the
  * MobileWorkbench's drawer and phase-based layout.
  */
@@ -33,7 +33,7 @@ class MobileLayoutContribution extends Disposable implements IWorkbenchContribut
 	}
 
 	private applyMobileLayout(): void {
-		// Hide desktop-only parts — the MobileWorkbench manages its own
+		// Hide desktop-only parts -- the MobileWorkbench manages its own
 		// top bar, drawer, and view containers.
 		this.layoutService.setPartHidden(true, Parts.TITLEBAR_PART);
 		this.layoutService.setPartHidden(true, Parts.ACTIVITYBAR_PART);

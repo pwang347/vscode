@@ -79,19 +79,19 @@ export function isNativeMobileApp(): boolean {
 export function navigateToShell(): void {
 	const origin = mainWindow.location.origin;
 
-	// Capacitor local origins — the shell is always at the root
+	// Capacitor local origins -- the shell is always at the root
 	if (origin === 'capacitor://localhost' || origin === 'https://localhost') {
 		mainWindow.location.href = origin + '/';
 		return;
 	}
 
-	// Android file:// — shell is at the asset root
+	// Android file:// -- shell is at the asset root
 	if (mainWindow.location.protocol === 'file:') {
 		mainWindow.location.href = 'file:///android_asset/public/index.html';
 		return;
 	}
 
-	// Native bridge — available when running inside the mobile app
+	// Native bridge -- available when running inside the mobile app
 	// on a remote server page where the Capacitor origin isn't active.
 	const nativeBridge = getMobileNativeBridge();
 	if (nativeBridge?.navigateToShell) {

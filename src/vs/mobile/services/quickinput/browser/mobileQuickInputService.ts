@@ -164,15 +164,15 @@ export class MobileQuickInputService extends WorkbenchQuickInputService {
 				const absDelta = Math.abs(deltaY);
 
 				if (deltaY > 0 && absDelta > viewportHeight * MobileQuickInputService.DISMISS_THRESHOLD) {
-					// Dragged down far enough — dismiss
+					// Dragged down far enough -- dismiss
 					widget.style.removeProperty('--mobile-sheet-translate-y');
 					this.cancel();
 				} else if (deltaY < 0 && !isSnappedTop && absDelta > viewportHeight * (MobileQuickInputService.SNAP_TOP_THRESHOLD - 0.3)) {
-					// Dragged up far enough from default — snap to top
+					// Dragged up far enough from default -- snap to top
 					widget.style.removeProperty('--mobile-sheet-translate-y');
 					widget.classList.add('mobile-sheet-snapped-top');
 				} else if (deltaY > 0 && isSnappedTop && absDelta > viewportHeight * 0.15) {
-					// Dragged down from snapped-top — unsnap back to default
+					// Dragged down from snapped-top -- unsnap back to default
 					widget.style.removeProperty('--mobile-sheet-translate-y');
 					widget.classList.remove('mobile-sheet-snapped-top');
 				} else {

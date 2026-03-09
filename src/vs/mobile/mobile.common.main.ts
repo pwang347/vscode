@@ -292,10 +292,7 @@ import '../workbench/contrib/meteredConnection/browser/meteredConnection.contrib
 // Mobile Connection (server management UI)
 import './contrib/connection/browser/connection.contribution.js';
 
-// Mobile Chat (haptic feedback on send)
-import './contrib/chat/browser/chat.contribution.js';
-
-// Mobile Layout (bottom nav bar, simplified chrome)
+// Mobile Layout (drawer-based navigation, simplified chrome)
 import './contrib/mobileLayout/browser/mobileLayout.contribution.js';
 
 //#endregion

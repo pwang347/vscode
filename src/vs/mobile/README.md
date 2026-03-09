@@ -48,34 +48,34 @@ src/vs/mobile/
 ├── mobile.common.main.ts               ← Common (browser) entry point
 ├── mobile.web.main.ts                  ← Web entry point (Capacitor WebView)
 ├── common/                             ← Shared types and context keys
-│   ├── contextkeys.ts                  ← Mobile context keys
-│   └── theme.ts                        ← Theme contributions
+│   └── contextkeys.ts                  ← Mobile context keys
 ├── browser/                            ← Core workbench implementation
 │   ├── workbench.ts                    ← Main workbench layout (MobileWorkbench class)
 │   ├── menus.ts                        ← Menu IDs for mobile menus
+│   ├── navigation.ts                   ← Native shell navigation helpers
 │   ├── mobile.html                     ← HTML shell for Capacitor WebView
+│   ├── mobile.ts                       ← Workbench bootstrapper
 │   ├── parts/                          ← Workbench part implementations
-│   │   ├── parts.ts                    ← MobileParts enum
-│   │   ├── chatBarPart.ts              ← Full-screen chat (primary surface)
-│   │   ├── navigationBar.ts            ← Bottom navigation bar
-│   │   ├── connectionBar.ts            ← Top connection status bar
-│   │   └── media/                      ← Part CSS files
-│   ├── media/                          ← Layout-specific styles
-│   │   └── style.css
-│   └── gestures/                       ← Touch gesture system
-│       ├── swipeNavigation.ts          ← Swipe left/right for navigation
-│       └── pullToRefresh.ts            ← Pull-to-refresh
+│   │   ├── parts.ts                    ← MobileParts / MobilePhase enums
+│   │   ├── topBar.ts                   ← Top bar (hamburger + title)
+│   │   ├── drawer.ts                   ← Side drawer (navigation, sessions)
+│   │   ├── welcomePage.ts              ← Server selection page
+│   │   └── workspacePicker.ts          ← Workspace selection page
+│   └── media/                          ← Layout-specific styles
+│       └── style.css
 ├── services/                           ← Service overrides
-│   ├── connection/
+│   ├── connection/browser/
 │   │   └── connectionService.ts        ← Remote server connection management
-│   ├── haptics/
+│   ├── haptics/browser/
 │   │   └── hapticFeedbackService.ts    ← Haptic feedback via Capacitor
-│   └── configuration/browser/          ← Mobile config overrides
+│   ├── quickinput/browser/
+│   │   └── mobileQuickInputService.ts  ← Bottom-sheet quick pick
+│   └── url/browser/
+│       └── mobileUrlCallbackProvider.ts ← OAuth deep-link handling
 ├── contrib/                            ← Feature contributions
-│   ├── chat/browser/                   ← Chat-related contributions
-│   ├── fileViewer/browser/             ← File viewer (limited editor)
-│   ├── terminal/browser/               ← Simplified terminal access
-│   └── connection/browser/             ← Server connection UI
+│   ├── connection/browser/             ← Server connection UI + actions
+│   ├── externalOpener/browser/         ← In-app browser for external links
+│   └── mobileLayout/browser/           ← Desktop chrome hiding
 └── test/                               ← Unit tests
     └── browser/
 ```
