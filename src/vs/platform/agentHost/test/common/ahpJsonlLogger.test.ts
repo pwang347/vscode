@@ -17,6 +17,18 @@ suite('AhpJsonlLogger', () => {
 
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('never records live computer-use video payloads in transport logs', () => {
+		const resource = { uri: 'computer-use://video/live?after=30', mimeType: 'application/json', text: '{"frames":["private-video"]}' };
+		const message = { jsonrpc: '2.0', id: 1, result: { contents: [resource] } };
+		assert.deepStrictEqual({
+			log: JSON.parse(stringifyAhpLogEntry(message)),
+			original: resource.text,
+		}, {
+			log: { jsonrpc: '2.0', id: 1, result: { contents: [{ uri: 'computer-use://video/live', redacted: 'live media' }] } },
+			original: '{"frames":["private-video"]}',
+		});
+	});
+
 	test('writes canonical JSON-RPC JSONL with metadata at the root', async () => {
 		const fileService = store.add(new FileService(new NullLogService()));
 		store.add(fileService.registerProvider('file', store.add(new InMemoryFileSystemProvider())));

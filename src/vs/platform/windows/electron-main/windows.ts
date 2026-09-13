@@ -155,6 +155,7 @@ export function defaultBrowserWindowOptions(accessor: ServicesAccessor, windowSt
 			spellcheck: false,
 			zoomFactor: zoomLevelToZoomFactor(windowState.zoomLevel ?? windowSettings?.zoomLevel),
 			autoplayPolicy: 'user-gesture-required',
+			disableHtmlFullscreenWindowResize: isMacintosh,
 			// Enable experimental css highlight api https://chromestatus.com/feature/5436441440026624
 			// Refs https://github.com/microsoft/vscode/issues/140098
 			enableBlinkFeatures: 'HighlightAPI',

@@ -39,6 +39,7 @@ import { CopilotSessionWrapper } from './copilotSessionWrapper.js';
 import { ShellManager, createShellTools, type IUnsandboxedCommandConfirmationRequest } from './copilotShellTools.js';
 import { isAutoModel, isGpt56Model } from './modelIdentifiers.js';
 import { EPHEMERAL_DISABLED_COPILOT_TOOLS } from './copilotToolDisplay.js';
+import { COPILOT_COMPUTER_USE_SERVER_NAME } from './copilotComputerUse.js';
 import './prompts/allPrompts.js';
 import { agentHostPromptRegistry, type IAgentHostPromptContext } from './prompts/promptRegistry.js';
 import { applyConfiguredPromptOverrides } from './prompts/promptOverride.js';
@@ -950,6 +951,7 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 			: agentHostPromptRegistry.resolveSystemMessageConfig(effectiveModel, promptContext);
 		this._logService.info(`[Copilot:${plan.sessionId}] Resolved system message: ${describeSystemMessageConfig(systemMessage)}`);
 		const additionalDisabledMcpServers = plan.isEphemeral ? [
+			COPILOT_COMPUTER_USE_SERVER_NAME,
 			...plugins.flatMap(plugin => plugin.mcpServers.map(server => server.name)),
 			...Object.keys(plan.snapshot.mcpServers),
 		] : undefined;

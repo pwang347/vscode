@@ -12,6 +12,7 @@ import { isCustomizationEnabled } from '../../common/customizationEnablement.js'
 import { CustomizationType, McpServerStatus, type AhpMcpUiHostCapabilities, type Customization, type CustomizationEnablement, type McpServerCustomization, type McpServerState } from '../../common/state/protocol/channels-session/state.js';
 import { DEFAULT_MCP_APP, DEFAULT_MCP_APP_CAPABILITIES } from '../../common/state/protocol/mcpAppDefaults.js';
 import { parseChatUri } from '../../common/state/sessionState.js';
+import { buildMcpChannel } from '../../common/mcpChannel.js';
 import type { SessionAction } from '../../common/state/sessionActions.js';
 import { AgentHostStateManager, IAgentHostStateManager } from '../agentHostStateManager.js';
 
@@ -78,10 +79,7 @@ export function buildMcpTopLevelCustomizationId(providerId: string, sessionId: s
 	return `mcp-top-level:${providerId}:${sessionId}:${serverName}`;
 }
 
-export function buildMcpChannel(chatUri: URI, serverName: string): string {
-	const providerId = getMcpChannelProviderId(chatUri);
-	return `mcp://${providerId}/${encodeURIComponent(chatUri.toString())}/${encodeURIComponent(serverName)}`;
-}
+export { buildMcpChannel } from '../../common/mcpChannel.js';
 
 /**
  * Translates a stream of SDK-reported MCP server states into AHP

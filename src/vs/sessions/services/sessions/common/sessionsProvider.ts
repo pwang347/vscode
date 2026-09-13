@@ -14,6 +14,7 @@ import { ModelIdentifierResolution } from '../../../../workbench/contrib/chat/co
 import { IAutomationDescriptor, IAutomationRun, IAutomationSessionTemplate } from '../../../../workbench/contrib/chat/common/automations/automation.js';
 import { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import { ChatModelSource, IChat, ISession, ISessionType, ISessionWorkspace, ISessionWorkspaceBrowseAction, ISideChatSelection } from './session.js';
+import { ISessionComputerUseVideoSource } from './computerUse.js';
 
 /**
  * Event fired when sessions change within a provider.
@@ -268,6 +269,9 @@ export interface ISessionsProvider {
 	 * {@link supportsQuickChats}) changes at runtime, so they can re-evaluate.
 	 */
 	readonly onDidChangeCapabilities?: Event<void>;
+
+	/** Opens a viewer for the exact chat without changing the active session or granting app access. */
+	getComputerUseVideoSource?(sessionId: string, chatResource: URI): ISessionComputerUseVideoSource;
 
 	/** Provider-owned Automation entities, persistence, and run history. */
 	readonly automations?: ISessionsProviderAutomations;

@@ -93,6 +93,16 @@ export const enum CopilotToolName {
 	WriteAgent = 'write_agent',
 	McpReload = 'mcp_reload',
 	McpValidate = 'mcp_validate',
+	ComputerUseListApps = 'computer-use-list_apps',
+	ComputerUseReadWindow = 'computer-use-get_window_state',
+	ComputerUseClick = 'computer-use-click',
+	ComputerUseSetValue = 'computer-use-set_value',
+	ComputerUsePatchText = 'computer-use-patch_text',
+	ComputerUseTypeText = 'computer-use-type_text',
+	ComputerUsePressKey = 'computer-use-press_key',
+	ComputerUseScroll = 'computer-use-scroll',
+	ComputerUseSecondaryAction = 'computer-use-perform_secondary_action',
+	ComputerUseDrag = 'computer-use-drag',
 	ToolSearchToolRegex = 'tool_search_tool_regex',
 	CodeqlChecker = 'codeql_checker',
 }
@@ -632,6 +642,16 @@ export function getToolDisplayName(toolName: string): string {
 		case CopilotToolName.WriteAgent: return localize('toolName.writeAgent', "Write to Agent");
 		case CopilotToolName.McpReload: return localize('toolName.mcpReload', "Reload MCP Config");
 		case CopilotToolName.McpValidate: return localize('toolName.mcpValidate', "Validate MCP Config");
+		case CopilotToolName.ComputerUseListApps: return localize('toolName.computerUse.listApps', "List Applications");
+		case CopilotToolName.ComputerUseReadWindow: return localize('toolName.computerUse.readWindow', "Read App Window");
+		case CopilotToolName.ComputerUseClick: return localize('toolName.computerUse.click', "Click in App");
+		case CopilotToolName.ComputerUseSetValue: return localize('toolName.computerUse.setValue', "Set App Field Value");
+		case CopilotToolName.ComputerUsePatchText: return localize('toolName.computerUse.patchText', "Edit App Text");
+		case CopilotToolName.ComputerUseTypeText: return localize('toolName.computerUse.typeText', "Type in App");
+		case CopilotToolName.ComputerUsePressKey: return localize('toolName.computerUse.pressKey', "Press App Keys");
+		case CopilotToolName.ComputerUseScroll: return localize('toolName.computerUse.scroll', "Scroll App Window");
+		case CopilotToolName.ComputerUseSecondaryAction: return localize('toolName.computerUse.secondaryAction', "Run App Action");
+		case CopilotToolName.ComputerUseDrag: return localize('toolName.computerUse.drag', "Drag in App");
 		case CopilotToolName.ToolSearchToolRegex: return localize('toolName.toolSearchToolRegex', "Search Tools");
 		default: return toolName;
 	}

@@ -12,7 +12,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { MockContextKeyService } from '../../../../../platform/keybinding/test/common/mockKeybindingService.js';
 import { TestStorageService } from '../../../../../workbench/test/common/workbenchTestServices.js';
 import { IChatSessionFileChange } from '../../../../../workbench/contrib/chat/common/chatSessionsService.js';
-import { SessionHasCachedChangesContext, SessionHasChangesContext, SessionHasGitRepositoryContext, SessionHasMultipleCommittedChatsContext, SessionHasSideChatsContext, SessionIsActiveContext, SessionSupportsSideChatContext } from '../../../../common/contextkeys.js';
+import { SessionHasCachedChangesContext, SessionHasChangesContext, SessionHasGitRepositoryContext, SessionHasMultipleCommittedChatsContext, SessionHasSideChatsContext, SessionIsActiveContext, SessionSupportsComputerUseVideoContext, SessionSupportsSideChatContext } from '../../../../common/contextkeys.js';
 import { ChatInteractivity, ChatOriginKind, IChat, ISession, ISessionChangeset, SessionStatus } from '../../common/session.js';
 import { IActiveSession } from '../../common/sessionsManagement.js';
 import { setActiveSessionContextKeys, setSessionContextKeys } from '../../common/sessionContextKeys.js';
@@ -81,6 +81,18 @@ function stubSession(overrides: Partial<ISession> & Pick<ISession, 'sessionId'>)
 
 suite('Session Context Keys', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('keeps live video capability scoped to the represented session', () => {
+		const firstContext = store.add(new MockContextKeyService());
+		const secondContext = store.add(new MockContextKeyService());
+		const first = stubSession({ sessionId: 'first', capabilities: constObservable({ supportsMultipleChats: false, supportsComputerUseVideo: true }) });
+		const second = stubSession({ sessionId: 'second' });
+		setSessionContextKeys(first, firstContext, undefined);
+		setSessionContextKeys(second, secondContext, undefined);
+		const enabled = [SessionSupportsComputerUseVideoContext.getValue(firstContext), SessionSupportsComputerUseVideoContext.getValue(secondContext)];
+		setSessionContextKeys(undefined, firstContext, undefined);
+		assert.deepStrictEqual({ enabled, cleared: SessionSupportsComputerUseVideoContext.getValue(firstContext) }, { enabled: [true, false], cleared: false });
+	});
 
 	test('publishes Git availability independently to scoped context key services', () => {
 		const firstHasGit = observableValue('firstHasGit', false);

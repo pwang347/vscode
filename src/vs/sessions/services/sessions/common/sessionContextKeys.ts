@@ -23,6 +23,7 @@ import {
 	SessionSupportsMultipleChatsContext,
 	SessionSupportsForkContext,
 	SessionSupportsSideChatContext,
+	SessionSupportsComputerUseVideoContext,
 	SessionSupportsRenameContext,
 	SessionTypeContext,
 	SessionWorkspaceIsVirtualContext,
@@ -52,6 +53,7 @@ interface ISessionContextKeys {
 	readonly supportsMultipleChats: IContextKey<boolean>;
 	readonly supportsFork: IContextKey<boolean>;
 	readonly supportsSideChat: IContextKey<boolean>;
+	readonly supportsComputerUseVideo: IContextKey<boolean>;
 	readonly supportsRename: IContextKey<boolean>;
 	readonly supportsDelete: IContextKey<boolean>;
 	readonly workspaceIsVirtual: IContextKey<boolean>;
@@ -95,6 +97,7 @@ function getBoundKeys(contextKeyService: IContextKeyService): ISessionContextKey
 			supportsMultipleChats: SessionSupportsMultipleChatsContext.bindTo(contextKeyService),
 			supportsFork: SessionSupportsForkContext.bindTo(contextKeyService),
 			supportsSideChat: SessionSupportsSideChatContext.bindTo(contextKeyService),
+			supportsComputerUseVideo: SessionSupportsComputerUseVideoContext.bindTo(contextKeyService),
 			supportsRename: SessionSupportsRenameContext.bindTo(contextKeyService),
 			supportsDelete: SessionSupportsDeleteContext.bindTo(contextKeyService),
 			workspaceIsVirtual: SessionWorkspaceIsVirtualContext.bindTo(contextKeyService),
@@ -148,6 +151,7 @@ export function setSessionContextKeys(session: ISession | undefined, contextKeyS
 	keys.supportsMultipleChats.set(capabilities?.supportsMultipleChats ?? false);
 	keys.supportsFork.set(capabilities?.supportsFork ?? false);
 	keys.supportsSideChat.set(capabilities?.supportsSideChat ?? false);
+	keys.supportsComputerUseVideo.set(capabilities?.supportsComputerUseVideo ?? false);
 	keys.supportsRename.set(capabilities?.supportsRename ?? false);
 	keys.supportsDelete.set(capabilities?.supportsDelete ?? false);
 	const workspace = session?.workspace.read(reader);

@@ -548,7 +548,7 @@ class MockCopilotSession {
 	readonly sandboxConfigUpdates: unknown[] = [];
 	readonly shellInitScriptUpdates: unknown[] = [];
 
-	mcpListResult: { servers: ReadonlyArray<{ name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled' | 'not_configured'; error?: string }> } = { servers: [] };
+	mcpListResult: { servers: ReadonlyArray<{ name: string; status: 'connected' | 'failed' | 'needs-auth' | 'pending' | 'disabled' | 'not_configured'; error?: string; source?: string }> } = { servers: [] };
 	mcpListError: unknown = undefined;
 	mcpEnableError: unknown = undefined;
 	mcpStartServerError: unknown = undefined;
@@ -12986,6 +12986,73 @@ Use the attached image as context.
 					mcpApp: { capabilities: { serverTools: { listChanged: true }, serverResources: {}, sampling: {} } },
 				}],
 			});
+		});
+
+		test('publishes built-in Computer Use without client MCP configuration', async () => {
+			const { session, mockSession } = await createAgentSession(disposables, {
+				configureMockSession: mock => {
+					mock.mcpListResult = { servers: [{ name: 'computer-use', status: 'connected', source: 'builtin' }] };
+				},
+			});
+
+			await session.send('Inspect the UI of my application');
+
+			assert.deepStrictEqual({
+				servers: session.topLevelMcpCustomizations().map(server => ({ name: server.name, status: server.state.kind })),
+				enableCalls: mockSession.mcpEnableCalls,
+			}, {
+				servers: [{ name: 'computer-use', status: McpServerStatus.Ready }],
+				enableCalls: [],
+			});
+		});
+
+		test('keeps built-in Computer Use disabled in ephemeral utility sessions', async () => {
+			const { session, mockSession } = await createAgentSession(disposables, {
+				isEphemeral: true,
+				configureMockSession: mock => {
+					mock.mcpListResult = { servers: [{ name: 'computer-use', status: 'connected', source: 'builtin' }] };
+				},
+			});
+
+			await session.send('Generate a short title');
+
+			assert.deepStrictEqual({
+				enable: mockSession.mcpEnableCalls,
+				disable: mockSession.mcpDisableCalls,
+			}, {
+				enable: [],
+				disable: [{ serverName: 'computer-use' }],
+			});
+		});
+
+		test('does not automatically enable a user-configured server named computer-use', async () => {
+			const { session, mockSession } = await createAgentSession(disposables, {
+				configureMockSession: mock => {
+					mock.mcpListResult = { servers: [{ name: 'computer-use', status: 'disabled', source: 'user' }] };
+				},
+			});
+
+			await session.send('Inspect the UI of my application');
+
+			assert.deepStrictEqual(mockSession.mcpEnableCalls, []);
+		});
+
+		test('respects scoped disablement of built-in Computer Use', async () => {
+			const { session, mockSession } = await createAgentSession(disposables, {
+				resolveCustomizationEnablement: target => ({
+					kind: 'resolved',
+					enablement: target.name === 'computer-use' ? [{ kind: CustomizationEnablementKind.Session, enabled: false }] : [],
+					enabled: target.name !== 'computer-use',
+					workingDirectory: { kind: 'workspaceless' },
+				}),
+				configureMockSession: mock => {
+					mock.mcpListResult = { servers: [{ name: 'computer-use', status: 'disabled', source: 'builtin' }] };
+				},
+			});
+
+			await session.send('Keep using the coding tools');
+
+			assert.deepStrictEqual(mockSession.mcpEnableCalls, []);
 		});
 
 		test('sending a message does not mark an enabled server as Starting', async () => {

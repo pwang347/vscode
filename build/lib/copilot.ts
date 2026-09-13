@@ -115,11 +115,9 @@ const copilotOptionalNativePayloadDirs = [
 	'webview',
 ];
 
-function getCopilotOptionalNativePayloadFiles(platform: string): string[] {
+function getCopilotOptionalNativePayloadFiles(platform: string, includeComputerUse: boolean): string[] {
 	const files = [
-		// Computer Use ships under plugins/computer-use/** in current
-		// @github/copilot platform packages. Do not productize it.
-		'plugins/computer-use/**',
+		...(!includeComputerUse || platform !== 'darwin' ? ['plugins/computer-use/**'] : []),
 		'prebuilds/*/computer.node',
 		'prebuilds/*/keytar.node',
 		// macOS voice media-pause helper (MediaRemote adapter). Optional and
@@ -211,7 +209,7 @@ export function getCopilotExcludeFilter(platform: string, arch: string): string[
  * entrypoint and load runtime prebuilds. Keep the standalone SEA executable
  * and optional native payload trees out of the product build.
  */
-export function getCopilotRuntimePrebuildFiles(platform: string, arch: string, nodeModulesRoot = 'node_modules'): string[] {
+export function getCopilotRuntimePrebuildFiles(platform: string, arch: string, nodeModulesRoot = 'node_modules', includeComputerUse = false): string[] {
 	const copilotPackagePlatformArch = toCopilotPackagePlatformArch(platform, arch);
 	const copilotPlatformPackageDir = path.posix.join(nodeModulesRoot, '@github', `copilot-${copilotPackagePlatformArch}`);
 
@@ -221,8 +219,13 @@ export function getCopilotRuntimePrebuildFiles(platform: string, arch: string, n
 		`!${path.posix.join(copilotPlatformPackageDir, 'copilot.exe')}`,
 		...copilotOutOfProcessRuntimeExecutables.map(executable => `!${path.posix.join(copilotPlatformPackageDir, 'prebuilds', '*', executable)}`),
 		...copilotOptionalNativePayloadDirs.map(dir => `!${path.posix.join(copilotPlatformPackageDir, dir, '**')}`),
-		...getCopilotOptionalNativePayloadFiles(platform).map(file => `!${path.posix.join(copilotPlatformPackageDir, file)}`),
+		...getCopilotOptionalNativePayloadFiles(platform, includeComputerUse).map(file => `!${path.posix.join(copilotPlatformPackageDir, file)}`),
 	];
+}
+
+/** Native desktop helpers retain their upstream signing identity and entitlements. */
+export function isCopilotComputerUseFile(filePath: string): boolean {
+	return /\/@github\/copilot-darwin-(?:arm64|x64)\/plugins\/computer-use(?:\/|$)/.test(filePath.replaceAll('\\', '/'));
 }
 
 /**

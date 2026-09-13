@@ -119,6 +119,11 @@ class MockAgentHostService extends mock<IAgentHostService>() {
 	public claimedDetachedWorktrees: string[] = [];
 	public deletedDetachedWorktrees: string[] = [];
 	public removedArtifacts: { session: URI; artifactId: string }[] = [];
+	public videoRequests: { channel: string; method: string; params: Record<string, unknown> | undefined }[] = [];
+	override async handleMcpRequest(channel: string, method: string, params: Record<string, unknown> | undefined): Promise<unknown> {
+		this.videoRequests.push({ channel, method, params });
+		return { contents: [{ uri: 'computer-use://video/live', mimeType: 'application/json', text: '{"version":1,"status":"idle"}' }] };
+	}
 	override async removeSessionArtifact(session: URI, artifactId: string): Promise<void> {
 		this.removedArtifacts.push({ session, artifactId });
 	}
@@ -5687,6 +5692,47 @@ suite('LocalAgentHostSessionsProvider', () => {
 			provider.getSessionConfig(session!.sessionId);
 			return session!;
 		}
+
+		test('binds Computer Use video to a published peer chat and removes availability with the server', async () => {
+			const provider = createProvider(disposables, agentHost);
+			const session = setupMultiChatSession(provider, 'video-peer');
+			const backendSession = AgentSession.uri('copilotcli', 'video-peer').toString();
+			const defaultChat = buildDefaultChatUri(backendSession);
+			const peerChat = buildChatUri(backendSession, 'peer');
+			const state = makeState([
+				makeChatSummary(defaultChat, ''),
+				makeChatSummary(peerChat, 'Peer'),
+			], { defaultChat });
+			agentHost.setSessionState('video-peer', 'copilotcli', {
+				...state,
+				customizations: [{
+					type: CustomizationType.McpServer,
+					id: 'computer-use',
+					uri: 'mcp:computer-use',
+					name: 'computer-use',
+					state: { kind: McpServerStatus.Ready },
+				}],
+			});
+			const available = session.capabilities.get().supportsComputerUseVideo;
+			const peer = session.chats.get().find(chat => chat.resource.fragment === 'peer')!;
+			const source = disposables.add(provider.getComputerUseVideoSource(session.sessionId, peer.resource));
+			await source.read(undefined, CancellationToken.None);
+			assert.throws(() => provider.getComputerUseVideoSource(session.sessionId, URI.parse('other:/chat')), /does not belong/);
+			agentHost.setSessionState('video-peer', 'copilotcli', state);
+			assert.deepStrictEqual({
+				available,
+				removed: session.capabilities.get().supportsComputerUseVideo ?? false,
+				requests: agentHost.videoRequests,
+			}, {
+				available: true,
+				removed: false,
+				requests: [{
+					channel: `mcp://copilotcli/${encodeURIComponent(peerChat)}/computer-use`,
+					method: 'resources/read',
+					params: { uri: 'computer-use://video/live' },
+				}],
+			});
+		});
 
 		test('default + peer catalog surfaces both chats with the default as mainChat', () => {
 			const provider = createProvider(disposables, agentHost);

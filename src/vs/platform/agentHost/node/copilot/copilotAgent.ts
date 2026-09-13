@@ -33,7 +33,7 @@ import { ITelemetryService } from '../../../telemetry/common/telemetry.js';
 import { INativeEnvironmentService } from '../../../../platform/environment/common/environment.js';
 import { workspacelessScratchDir } from '../../common/workspacelessScratchDir.js';
 import { IAgentHostCheckpointService } from '../../common/agentHostCheckpointService.js';
-import type { IAgentHostClientTelemetryContext } from '../../common/agentHostTelemetry.js';
+import { AgentHostLaunchKindEnvVar, readAgentHostLaunchKind, type IAgentHostClientTelemetryContext } from '../../common/agentHostTelemetry.js';
 import { IAgentHostReviewService } from '../../common/agentHostReviewService.js';
 import { createPricingMetaFromBilling, hasLongContextSurcharge, normalizeCAPIBilling, type ICAPIModelBilling } from '../../common/agentModelPricing.js';
 import { createContextSizeConfigSchemaProperty } from '../../common/agentModelConfiguration.js';
@@ -98,6 +98,7 @@ import { DiscoveredType, SessionCustomizationDiscovery, areDiscoveredDirectories
 import { computeFolderPickerDecisionForRoots } from '../shared/folderPickerDecision.js';
 import { COPILOT_INTEGRATION_ID } from '../../../endpoint/common/licenseAgreement.js';
 import { getAppNodeModulesUri } from '../appNodeModules.js';
+import { COPILOT_COMPUTER_USE_PLUGIN_PATH_ENV_VAR, COPILOT_COMPUTER_USE_REMOTE_ENABLED_ENV_VAR, COPILOT_COMPUTER_USE_SERVER_NAME, resolveCopilotComputerUsePlugin } from './copilotComputerUse.js';
 import { CopilotSlashCommandProvider } from './copilotSlashCommandProvider.js';
 import { SessionMcpDiscovery } from '../shared/sessionMcpDiscovery.js';
 import { hasClientPluginMcpDefaultCwd, readClientPluginMcpDefaultCwd } from '../../common/meta/clientPluginCustomizationMeta.js';
@@ -2341,6 +2342,15 @@ export class CopilotAgent extends Disposable implements IAgent {
 			const nodeModulesUri = getAppNodeModulesUri();
 			const cliPath = await resolveCopilotCliPath(nodeModulesUri);
 
+			const computerUsePlugin = await resolveCopilotComputerUsePlugin({
+				cliPath,
+				platform: process.platform,
+				hostLaunchKind: readAgentHostLaunchKind(process.env[AgentHostLaunchKindEnvVar]),
+				isBuilt: this._environmentService.isBuilt,
+				developmentPluginPath: process.env[COPILOT_COMPUTER_USE_PLUGIN_PATH_ENV_VAR],
+				remoteEnabled: process.env[COPILOT_COMPUTER_USE_REMOTE_ENABLED_ENV_VAR] === '1',
+			}, this._logService);
+
 			// The SDK's sandbox auto-detection looks for `<MXC_BIN_DIR>/<arch>/wxc-exec.exe`
 			// (and the Linux/macOS equivalents). VS Code core ships the MXC sandbox binaries
 			// at `<nodeModules>/@microsoft/mxc-sdk/bin/<arch>/`, so point `MXC_BIN_DIR` there.
@@ -2379,6 +2389,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 			const clientOptions: CopilotClientOptions = {
 				useLoggedInUser: false,
 				connection: RuntimeConnection.forStdio({ path: cliPath }),
+				builtinPluginDirectories: computerUsePlugin ? [computerUsePlugin] : undefined,
 				env,
 				clientInfo: {
 					applicationName: 'vscode-agent-host',
@@ -5345,6 +5356,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 	private async _disabledRootMcpServers(session: URI, sessionId: string, snapshot: IActiveClientSnapshot): Promise<readonly string[]> {
 		await this._customizationEnablementService.initializeSession(session.toString());
 		const serverNames = new Set(Object.keys(snapshot.mcpServers));
+		serverNames.add(COPILOT_COMPUTER_USE_SERVER_NAME);
 		if (this._isGitHubMcpServerEnabled()) {
 			serverNames.add(GITHUB_MCP_SERVER_NAME);
 		}

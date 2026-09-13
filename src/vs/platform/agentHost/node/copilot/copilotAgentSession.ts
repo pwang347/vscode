@@ -78,6 +78,7 @@ import { buildSandboxConfigForSdk, type SandboxConfig } from './sandboxConfigFor
 import type { IAgentServerToolHost } from '../../common/agentServerTools.js';
 import { AGENT_MERGE_GITHUB_TOOL_RESTRICTION, getAgentMergeGitHubToolRestriction, isCopilotMcpToolName } from '../shared/agentMergeToolRestrictions.js';
 import { GITHUB_MCP_SERVER_NAME } from '../shared/githubMcpServer.js';
+import { COPILOT_COMPUTER_USE_SERVER_NAME } from './copilotComputerUse.js';
 import { getEditFilePaths, getInvocationMessage, getPastTenseMessage, getPermissionDisplay, getShellIntention, getShellLanguage, getStreamingInvocationMessage, getSubagentMetadata, getTaskCompleteMarkdown, getToolDisplayName, getToolInputString, getToolKind, isAgentCoordinationTool, isCopilotSdkToolOutputFile, isEditTool, isHiddenTool, isShellTool, isTaskCompleteTool, parseCopilotStreamingToolInput, synthesizeSkillToolCall, tryStringify } from './copilotToolDisplay.js';
 import { FileEditTracker } from '../shared/fileEditTracker.js';
 import { ICopilotApiService, type IRestrictedTelemetryContext } from '../shared/copilotApiService.js';
@@ -1241,6 +1242,7 @@ export class CopilotAgentSession extends Disposable {
 		this._appliedSnapshot = options.clientSnapshot ?? { tools: [], plugins: [], mcpServers: {} };
 		this._mcpServerNames = new Set([
 			GITHUB_MCP_SERVER_NAME,
+			COPILOT_COMPUTER_USE_SERVER_NAME,
 			...Object.keys(this._appliedSnapshot.mcpServers),
 			...this._appliedSnapshot.plugins.flatMap(plugin => plugin.mcpServers.map(server => server.name)),
 		]);
@@ -3654,6 +3656,9 @@ export class CopilotAgentSession extends Disposable {
 		}
 		for (const name of this._launchPlan.disabledRootMcpServers ?? []) {
 			result.set(name, false);
+		}
+		if (this._launchPlan.isEphemeral) {
+			result.set(COPILOT_COMPUTER_USE_SERVER_NAME, false);
 		}
 		return result;
 	}

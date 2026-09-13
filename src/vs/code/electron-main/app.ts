@@ -264,6 +264,7 @@ export class CodeApplication extends Disposable {
 
 		const allowedPermissionsInCore = new Set([
 			...alwaysAllowedPermissions,
+			'fullscreen',
 			'media',
 			'local-fonts',
 			// TODO(deepak1556): Should be removed once migration is complete

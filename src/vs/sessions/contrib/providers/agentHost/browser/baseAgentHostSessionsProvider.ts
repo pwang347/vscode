@@ -74,6 +74,8 @@ import { parseGitHubPullRequestUrl } from '../../../github/common/utils.js';
 import { mapProtocolStatus } from './agentHostDiffs.js';
 import { createActiveSessionSubscriptionObs, createChangesets, IAgentHostChangeset, selectMostRecentChatUri } from './agentHostSessionChangesets.js';
 import { createSessionOutputObs, ISessionOutputObs } from './agentHostSessionFiles.js';
+import { ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
+import { AgentHostComputerUseVideoSource } from './agentHostComputerUseVideo.js';
 
 const STORAGE_KEY_REMEMBERED_SESSION_CONFIG_VALUES = 'sessions.agentHost.sessionConfigPicker.selectedValues';
 const UNSAFE_SESSION_CONFIG_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
@@ -875,6 +877,7 @@ export class AgentHostSessionAdapter extends Disposable implements ISession {
 	private readonly _worktreeIsolation = observableValue<boolean>('worktreeIsolation', false);
 	/** Interactivity of the default chat. Driven from the default chat's protocol summary. */
 	private readonly _defaultChatInteractivity = observableValue<ChatInteractivity>('defaultChatInteractivity', ChatInteractivity.Full);
+	private readonly _computerUseVideoAvailable = observableValue(this, false);
 	private readonly _mainChatObs: ISettableObservable<IChat>;
 	private readonly _chatsObs: ISettableObservable<readonly IChat[]>;
 	/** Additional (non-default) peer chats keyed by chatId. */
@@ -1188,6 +1191,7 @@ export class AgentHostSessionAdapter extends Disposable implements ISession {
 			this._options.connectionStatus?.read(reader);
 			const connection = this._options.getConnection();
 			return {
+				...(!!connection && this._computerUseVideoAvailable.read(reader) ? { supportsComputerUseVideo: true } : {}),
 				supportsRemoveArtifacts: !!connection?.removeSessionArtifact && supportsAgentHostArtifactRemoval(connection.initializeResult.read(reader)),
 				supportsMultipleChats: !this.isQuickChat.read(reader) && (agentCapabilities?.multipleChats !== undefined),
 				supportsFork: agentCapabilities?.multipleChats?.fork ?? false,
@@ -1216,6 +1220,10 @@ export class AgentHostSessionAdapter extends Disposable implements ISession {
 	 */
 	applyChatCatalog(state: SessionState): void {
 		this._lastCatalogState = state;
+		this._computerUseVideoAvailable.set((state.customizations ?? []).some(customization => {
+			const servers = customization.type === CustomizationType.McpServer ? [customization] : customization.children ?? [];
+			return servers.some(server => server.type === CustomizationType.McpServer && server.name === 'computer-use');
+		}), undefined);
 		if (this._chatCatalogCapabilitiesObserver.value) {
 			this._applyChatCatalog(state);
 		} else {
@@ -4663,6 +4671,30 @@ export abstract class BaseAgentHostSessionsProvider extends Disposable implement
 					});
 				},
 			}));
+	}
+
+	getComputerUseVideoSource(sessionId: string, chatResource: URI): ISessionComputerUseVideoSource {
+		const rawId = this._rawIdFromChatId(sessionId);
+		const session = rawId ? this._sessionCache.get(rawId) : undefined;
+		const connection = this.connection;
+		if (!session || !connection || !session.capabilities.get().supportsComputerUseVideo) {
+			throw new Error(localize('computerUse.unavailable', "Computer Use video is unavailable for this session."));
+		}
+		if (!session.chats.get().some(chat => isEqual(chat.resource, chatResource))) {
+			throw new Error(localize('computerUse.wrongChat', "The selected chat does not belong to this session."));
+		}
+		const backendChat = this.getBackendChatResource(chatResource);
+		if (!backendChat) {
+			throw new Error(localize('computerUse.chatUnavailable', "The selected chat is not available on this host."));
+		}
+		return new AgentHostComputerUseVideoSource({
+			hostLabel: this.label,
+			chat: backendChat,
+			connection,
+			getConnection: () => this.connection,
+			isEnabled: () => this.getMcpServers(sessionId).some(server => server.name === 'computer-use' && server.enabled),
+			cancelChat: () => this._chatService.cancelCurrentRequestForSession(chatResource, 'computerUseVideo'),
+		});
 	}
 
 	setCustomizationEnablement(sessionId: string, customizationId: string, enablement: readonly CustomizationEnablement[]): void {

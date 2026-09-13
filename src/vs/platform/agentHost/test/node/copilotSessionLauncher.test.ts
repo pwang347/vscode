@@ -753,7 +753,7 @@ suite('CopilotSessionLauncher shared session config', () => {
 				resumeManagedSettings: { permissions: managedSettingsPermissions },
 				resumeStreaming: true,
 				ephemeralMcpServers: {},
-				ephemeralDisabledMcpServers: ['azure', 'disabled-workspace-server', 'github', 'native-plugin-server', 'synced-server'],
+				ephemeralDisabledMcpServers: ['azure', 'disabled-workspace-server', 'github', 'computer-use', 'native-plugin-server', 'synced-server'],
 				ephemeralExcludedTools: ['task', `builtin:${SEMANTIC_SEARCH_TOOL_NAME}`],
 				mcpProjectionTraces: [
 					{
@@ -777,7 +777,7 @@ suite('CopilotSessionLauncher shared session config', () => {
 						pluginDiscovery: ['native-plugin-server'],
 						sessionConfig: ['synced-server'],
 						rootConfig: [],
-						disabled: ['azure', 'disabled-workspace-server', 'github', 'native-plugin-server', 'synced-server'],
+						disabled: ['azure', 'computer-use', 'disabled-workspace-server', 'github', 'native-plugin-server', 'synced-server'],
 						finalSessionConfig: [],
 					},
 				],

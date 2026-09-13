@@ -47,6 +47,7 @@ import { VSBuffer } from '../../../base/common/buffer.js';
 import { errorHandler } from '../../../base/common/errors.js';
 import { FocusMode, IApplicationBadge } from '../../native/common/native.js';
 import { Color } from '../../../base/common/color.js';
+import { registerInPlaceHtmlFullScreen } from './htmlFullScreen.js';
 
 export interface IWindowCreationOptions {
 	readonly state: IWindowState;
@@ -181,6 +182,9 @@ export abstract class BaseWindow extends Disposable implements IBaseWindow {
 	get win() { return this._win; }
 	protected setWin(win: electron.BrowserWindow, options?: BrowserWindowConstructorOptions): void {
 		this._win = win;
+		if (isMacintosh && options?.webPreferences?.disableHtmlFullscreenWindowResize) {
+			this._register(registerInPlaceHtmlFullScreen(win));
+		}
 
 		// Window Events
 		this._register(Event.fromNodeEventEmitter(win, 'maximize')(() => {

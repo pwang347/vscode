@@ -241,6 +241,13 @@ function stringifyAhpLogEntryTruncated(value: unknown, maxStringLength: number):
  * would otherwise be required to find every URI in a message payload.
  */
 function _ahpReplacer(this: unknown, _key: string, value: unknown): unknown {
+	if (value && typeof value === 'object') {
+		const resource = value as { uri?: string; text?: string; blob?: string };
+		if (typeof resource.uri === 'string' && /^computer-use:\/\/video\/live(?:\?|$)/.test(resource.uri)
+			&& (typeof resource.text === 'string' || typeof resource.blob === 'string')) {
+			return { uri: 'computer-use://video/live', redacted: 'live media' };
+		}
+	}
 	if (
 		value
 		&& typeof value === 'object'

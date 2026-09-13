@@ -75,7 +75,8 @@ export const enum AccessibilityVerbositySettingId {
 	Survey = 'accessibility.verbosity.survey',
 	Automations = 'accessibility.verbosity.automations',
 	BrowserElementCommenting = 'accessibility.verbosity.browserElementCommenting',
-	ChatPetAchievements = 'accessibility.verbosity.chatPetAchievements'
+	ChatPetAchievements = 'accessibility.verbosity.chatPetAchievements',
+	ComputerUse = 'accessibility.verbosity.computerUse',
 }
 
 const baseVerbosityProperty: IConfigurationPropertySchema = {

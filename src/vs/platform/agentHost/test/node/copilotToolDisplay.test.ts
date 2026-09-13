@@ -106,6 +106,32 @@ suite('copilotToolDisplay — friendly tool names', () => {
 		}
 	});
 
+	test('uses friendly labels for native Computer Use tools', () => {
+		assert.deepStrictEqual([
+			'computer-use-list_apps',
+			'computer-use-get_window_state',
+			'computer-use-click',
+			'computer-use-set_value',
+			'computer-use-patch_text',
+			'computer-use-type_text',
+			'computer-use-press_key',
+			'computer-use-scroll',
+			'computer-use-perform_secondary_action',
+			'computer-use-drag',
+		].map(getToolDisplayName), [
+			'List Applications',
+			'Read App Window',
+			'Click in App',
+			'Set App Field Value',
+			'Edit App Text',
+			'Type in App',
+			'Press App Keys',
+			'Scroll App Window',
+			'Run App Action',
+			'Drag in App',
+		]);
+	});
+
 	test('falls back to the raw tool name for unknown tools', () => {
 		assert.strictEqual(getToolDisplayName('some_new_tool'), 'some_new_tool');
 	});

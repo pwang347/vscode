@@ -10,7 +10,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { suite, test } from 'node:test';
 import { create } from 'tar';
-import { copilotPlatforms, ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getMxcExcludeFilter, prepareBuiltInCopilotRipgrepShim } from '../copilot.ts';
+import { copilotPlatforms, ensureCopilotPlatformPackage, getCopilotExcludeFilter, getCopilotRuntimePrebuildFiles, getMxcExcludeFilter, isCopilotComputerUseFile, prepareBuiltInCopilotRipgrepShim } from '../copilot.ts';
 
 /**
  * Builds a fake `@github/copilot-win32-x64@1.0.73` tarball on disk and returns
@@ -167,6 +167,39 @@ suite('copilot', () => {
 		assertCopilotStandaloneExecutableExcluded(files, 'node_modules/@github/copilot-darwin-arm64');
 		assertCopilotOutOfProcessRuntimeExecutablesExcluded(files, 'node_modules/@github/copilot-darwin-arm64');
 		assertOptionalCopilotNativeDependenciesExcluded(files, 'node_modules/@github/copilot-darwin-arm64');
+	});
+
+	test('includes the complete Computer Use bundle in opted-in macOS packaging', () => {
+		const relativeFiles = [
+			'plugins/computer-use/.plugin/plugin.json',
+			'plugins/computer-use/.mcp.json',
+			'plugins/computer-use/computer-use-mcp',
+			'plugins/computer-use/Copilot Computer Use.app/Contents/Info.plist',
+			'plugins/computer-use/Copilot Computer Use.app/Contents/MacOS/Copilot Computer Use',
+			'plugins/computer-use/Copilot Computer Use.app/Contents/_CodeSignature/CodeResources',
+		];
+		for (const arch of ['arm64', 'x64']) {
+			const packageDir = `node_modules/@github/copilot-darwin-${arch}`;
+			const desktop = getCopilotRuntimePrebuildFiles('darwin', arch, 'node_modules', true);
+			const excluded = getCopilotRuntimePrebuildFiles('darwin', arch);
+			const remote = getCopilotRuntimePrebuildFiles('darwin', arch, 'remote/node_modules', true);
+			assert.deepStrictEqual(relativeFiles.map(file => ({
+				desktop: matchesGlob(`${packageDir}/${file}`, desktop),
+				excluded: matchesGlob(`${packageDir}/${file}`, excluded),
+				remote: matchesGlob(`remote/${packageDir}/${file}`, remote),
+			})), relativeFiles.map(() => ({ desktop: true, excluded: false, remote: true })));
+		}
+		assertOptionalCopilotNativeDependenciesExcluded(getCopilotRuntimePrebuildFiles('win32', 'x64', 'node_modules', true), 'node_modules/@github/copilot-win32-x64');
+	});
+
+	test('preserves upstream signatures only within the macOS Computer Use bundle', () => {
+		assert.deepStrictEqual([
+			'/app/node_modules.asar.unpacked/@github/copilot-darwin-arm64/plugins/computer-use',
+			'/app/node_modules.asar.unpacked/@github/copilot-darwin-x64/plugins/computer-use/computer-use-mcp',
+			'/app/node_modules.asar.unpacked/@github/copilot-darwin-arm64/plugins/computer-use/Copilot Computer Use.app/Contents/MacOS/Copilot Computer Use',
+			'/app/node_modules.asar.unpacked/@github/copilot-darwin-arm64/prebuilds/darwin-arm64/runtime.node',
+			'/app/node_modules.asar.unpacked/@github/copilot-darwin-arm64/plugins/computer-use-other/tool',
+		].map(isCopilotComputerUseFile), [true, true, true, false, false]);
 	});
 
 	test('materializes missing target platform packages from the lockfile', () => {

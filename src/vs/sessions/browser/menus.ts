@@ -35,6 +35,7 @@ export const Menus = {
 	AccountMenu: new MenuId('SessionsAccountMenu'),
 	GoMenu: new MenuId('SessionsGoMenu'),
 	AgentFeedbackEditorContent: new MenuId('AgentFeedbackEditorContent'),
+	ComputerUsePlayer: new MenuId('SessionsComputerUsePlayer'),
 
 	/** Header actions of the test custom view. */
 	CustomViewTest: new MenuId('SessionsCustomViewTest'),

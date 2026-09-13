@@ -1351,7 +1351,7 @@ suite('CopilotAgent', () => {
 		}
 	});
 
-	test('initializes enablement before disabling the built-in GitHub MCP server at launch', async () => {
+	test('initializes enablement before disabling built-in MCP servers at launch', async () => {
 		let initializedSession: string | undefined;
 		const disabledRootMcpServers = (CopilotAgent.prototype as unknown as {
 			_disabledRootMcpServers(this: {
@@ -1369,7 +1369,7 @@ suite('CopilotAgent', () => {
 			_customizationEnablementService: {
 				initializeSession: async session => { initializedSession = session; },
 				resolve: (_session, target) => {
-					const enabled = target.name !== GITHUB_MCP_SERVER_NAME;
+					const enabled = target.name !== GITHUB_MCP_SERVER_NAME && target.name !== 'computer-use';
 					return { kind: 'resolved', enablement: [{ kind: CustomizationEnablementKind.Session, enabled }], enabled, workingDirectory: { kind: 'workspaceless' } };
 				},
 			},
@@ -1377,7 +1377,7 @@ suite('CopilotAgent', () => {
 
 		assert.deepStrictEqual({ initializedSession, result }, {
 			initializedSession: AgentSession.uri('copilotcli', 'session').toString(),
-			result: [GITHUB_MCP_SERVER_NAME],
+			result: ['computer-use', GITHUB_MCP_SERVER_NAME],
 		});
 	});
 

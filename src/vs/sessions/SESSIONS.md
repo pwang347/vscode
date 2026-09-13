@@ -123,6 +123,17 @@ Sessions may expose the artifacts and references recorded by the agent. Both sha
 
 Providers may advertise `supportsRemoveArtifacts` and implement `removeSessionArtifact`. User-initiated removal routes through `ISessionsManagementService` to the owning provider, which persists and publishes the updated artifact list. Removing a record does not remove independent session associations or alter the linked resource.
 
+### Live computer-use viewing
+
+Providers may advertise `supportsComputerUseVideo` and supply a
+`getComputerUseVideoSource` for an exact session and chat. The source retains
+its host connection identity; changing the active session or reconnecting
+another host never retargets an open viewer. The provider owns transport and
+agent cancellation, while the Sessions contribution owns playback and
+presentation. Closing or pausing a player stops viewing, not agent work;
+the explicit Stop Agent action targets only the source's chat. Live media
+is transient and is not session history or persisted layout state.
+
 ## Provider contract
 
 `ISessionsProvider` is defined in `services/sessions/common/sessionsProvider.ts`. A provider represents one compute environment. A provider may advertise multiple session types, and multiple providers may advertise the same logical type.
