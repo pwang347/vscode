@@ -238,7 +238,7 @@ function renderCompletionNotices(context: ComponentFixtureContext): void {
 		'Background agent `History reviewer` completed',
 		'Background agent `Lifecycle reviewer` failed',
 	]) {
-		const part = disposableStore.add(instantiationService.createInstance(ChatSystemNotificationContentPart, { kind: 'systemNotification', content: new MarkdownString(content) }, renderer));
+		const part = disposableStore.add(instantiationService.createInstance(ChatSystemNotificationContentPart, { kind: 'systemNotification', content: new MarkdownString(content) }, renderer, undefined));
 		transcript.appendChild(part.domNode);
 	}
 }

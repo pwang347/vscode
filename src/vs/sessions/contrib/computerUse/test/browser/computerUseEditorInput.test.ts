@@ -59,4 +59,22 @@ suite('ComputerUseEditorInput', () => {
 			stops: source.stopCalls,
 		}, { resource: undefined, untyped: undefined, reopenable: false, disposed: 1, stops: 0 });
 	});
+
+	test('labels recorded playback separately from a live viewer', () => {
+		const input = store.add(new ComputerUseEditorInput(
+			identity,
+			constObservable('Session'),
+			constObservable('Checkout'),
+			new TestVideoSource('Recorded on Agent Host', 'recording'),
+		));
+		assert.deepStrictEqual({
+			name: input.getName(),
+			title: input.getTitle(),
+			icon: input.getIcon().id,
+		}, {
+			name: 'Computer Use Recording',
+			title: 'Computer Use Recording — Recorded on Agent Host',
+			icon: 'play-circle',
+		});
+	});
 });

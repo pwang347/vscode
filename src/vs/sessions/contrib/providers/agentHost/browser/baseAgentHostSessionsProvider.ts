@@ -34,10 +34,11 @@ import { KNOWN_MODE_VALUES, omitAutomationSessionTemplateConfigValues, SessionCo
 import { applyLegacyAutomationSessionConfig } from '../../../../../platform/agentHost/common/automationMigration.js';
 import { migrateLegacyAutopilotConfig } from '../../../../../platform/agentHost/common/agentHostSchema.js';
 import { readAgentDevContainerWorktreeMetadata, withAgentDevContainerWorktreeMetadata, type IAgentDevContainerWorktreeMetadata } from '../../../../../platform/agentHost/common/meta/agentDevContainerWorktreeMeta.js';
+import { readToolCallMeta } from '../../../../../platform/agentHost/common/meta/agentToolCallMeta.js';
 import type { IAgentSubscription } from '../../../../../platform/agentHost/common/state/agentSubscription.js';
 import { ResolveSessionConfigResult, type SessionConfigPropertySchema } from '../../../../../platform/agentHost/common/state/protocol/commands.js';
-import { AgentCustomization, ChangesSummary, ChatInteractivity as ProtocolChatInteractivity, ChatOriginKind as ProtocolChatOriginKind, type ClientPluginCustomization, Customization, CustomizationEnablementKind, CustomizationType, type CustomizationEnablement, ModelSelection, SessionStatus as ProtocolSessionStatus, RootConfigState, RootState, type SessionActiveClient, SessionState, SessionSummary, type Changeset } from '../../../../../platform/agentHost/common/state/protocol/state.js';
-import { ActionType, isChatAction, isSessionAction, NotificationType, type SessionSummaryChanges } from '../../../../../platform/agentHost/common/state/sessionActions.js';
+import { AgentCustomization, ChangesSummary, ChatInteractivity as ProtocolChatInteractivity, ChatOriginKind as ProtocolChatOriginKind, type ClientPluginCustomization, Customization, CustomizationEnablementKind, CustomizationType, type CustomizationEnablement, ModelSelection, SessionStatus as ProtocolSessionStatus, RootConfigState, RootState, type SessionActiveClient, SessionState, SessionSummary, ToolCallContributorKind, type Changeset } from '../../../../../platform/agentHost/common/state/protocol/state.js';
+import { ActionType, isChatAction, isSessionAction, NotificationType, type ChatAction, type IToolCallReadyAction, type SessionSummaryChanges } from '../../../../../platform/agentHost/common/state/sessionActions.js';
 import { AgentCapabilities, AgentInfo, buildChatUri, buildDefaultChatUri, buildSubagentChatUri, DEFAULT_CHAT_ID, getSessionChatResource, getSessionRelatedPullRequestUrls, isDefaultChatUri, isSessionStatusArchived, isSessionStatusRead, parseChatUri, readSessionCreationReference, readSessionEhcliAdoptable, readSessionExternal, readSessionGitHubState, readSessionGitState, readSessionMultiRootMetadata, readSessionSourceControlState, readSessionWorkspaceless, ROOT_STATE_URI, SESSION_META_MULTI_ROOT_KEY, SessionMeta, SessionSourceControlOutcome, StateComponents, withSessionCreationReference, withSessionExternal, withSessionGitHubState, withSessionMultiRootMetadata, withSessionStatusFlag, withSessionWorkspaceless, type ChatState, type ChatSummary, type ISessionCreationReference as IProtocolSessionCreationReference, type ISessionGitHubState, type ISessionGitState, type ISessionMultiRootMetadata } from '../../../../../platform/agentHost/common/state/sessionState.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -74,12 +75,20 @@ import { parseGitHubPullRequestUrl } from '../../../github/common/utils.js';
 import { mapProtocolStatus } from './agentHostDiffs.js';
 import { createActiveSessionSubscriptionObs, createChangesets, IAgentHostChangeset, selectMostRecentChatUri } from './agentHostSessionChangesets.js';
 import { createSessionOutputObs, ISessionOutputObs } from './agentHostSessionFiles.js';
-import { ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
+import { IComputerUseSharedThought, ISessionComputerUseInvocation, ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
 import { AgentHostComputerUseVideoSource } from './agentHostComputerUseVideo.js';
 
 const STORAGE_KEY_REMEMBERED_SESSION_CONFIG_VALUES = 'sessions.agentHost.sessionConfigPicker.selectedValues';
 const UNSAFE_SESSION_CONFIG_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const SESSION_CHANGE_NOTIFICATION_DEBOUNCE_MS = 50;
+const COMPUTER_USE_SHARED_REASONING_MAX_LENGTH = 8192;
+
+interface ISharedReasoningState {
+	readonly observable: ISettableObservable<IComputerUseSharedThought | undefined>;
+	turnId: string | undefined;
+	partId: string | undefined;
+	text: string;
+}
 
 function mergeSessionChangeEvents(events: readonly ISessionChangeEvent[]): ISessionChangeEvent {
 	const changes = new Map<string, { added?: ISession; removed?: ISession; changed?: ISession }>();
@@ -878,6 +887,7 @@ export class AgentHostSessionAdapter extends Disposable implements ISession {
 	/** Interactivity of the default chat. Driven from the default chat's protocol summary. */
 	private readonly _defaultChatInteractivity = observableValue<ChatInteractivity>('defaultChatInteractivity', ChatInteractivity.Full);
 	private readonly _computerUseVideoAvailable = observableValue(this, false);
+	private readonly _sharedReasoningByChatId = new Map<string, ISharedReasoningState>();
 	private readonly _mainChatObs: ISettableObservable<IChat>;
 	private readonly _chatsObs: ISettableObservable<readonly IChat[]>;
 	/** Additional (non-default) peer chats keyed by chatId. */
@@ -1237,6 +1247,67 @@ export class AgentHostSessionAdapter extends Disposable implements ISession {
 		}
 	}
 
+	noteComputerUseVideoAvailable(): void {
+		this._computerUseVideoAvailable.set(true, undefined);
+	}
+
+	getComputerUseSharedReasoning(chatId: string): IObservable<IComputerUseSharedThought | undefined> {
+		return this._sharedReasoningState(chatId).observable;
+	}
+
+	updateComputerUseSharedReasoning(chatId: string, action: ChatAction): void {
+		const state = this._sharedReasoningState(chatId);
+		switch (action.type) {
+			case ActionType.ChatTurnStarted:
+				state.turnId = action.turnId;
+				state.partId = undefined;
+				state.text = '';
+				state.observable.set(undefined, undefined);
+				return;
+			case ActionType.ChatReasoning: {
+				const samePart = state.turnId === action.turnId && state.partId === action.partId;
+				const combined = `${samePart ? state.text : ''}${action.content}`;
+				state.turnId = action.turnId;
+				state.partId = action.partId;
+				state.text = combined.length > COMPUTER_USE_SHARED_REASONING_MAX_LENGTH
+					? combined.slice(combined.length - COMPUTER_USE_SHARED_REASONING_MAX_LENGTH)
+					: combined;
+				state.observable.set({
+					source: 'reasoning',
+					text: state.text,
+					streaming: true,
+				}, undefined);
+				return;
+			}
+			case ActionType.ChatToolCallStart:
+			case ActionType.ChatDelta:
+			case ActionType.ChatResponsePart:
+			case ActionType.ChatTurnComplete:
+			case ActionType.ChatTurnCancelled:
+			case ActionType.ChatError: {
+				const current = state.observable.get();
+				if (current?.streaming && state.turnId === action.turnId) {
+					state.observable.set({ ...current, streaming: false }, undefined);
+				}
+				return;
+			}
+		}
+	}
+
+	private _sharedReasoningState(chatId: string): ISharedReasoningState {
+		let state = this._sharedReasoningByChatId.get(chatId);
+		if (!state) {
+			state = {
+				observable: observableValue<IComputerUseSharedThought | undefined>(this, undefined),
+				turnId: undefined,
+				partId: undefined,
+				text: '',
+			};
+			this._sharedReasoningByChatId.set(chatId, state);
+		}
+		return state;
+	}
+
 	private _applyChatCatalog(state: SessionState): void {
 		// The default chat's catalog title drives its independent tab title.
 		// Empty means "inherit the session title"; a non-empty value means it was
@@ -1276,6 +1347,7 @@ export class AgentHostSessionAdapter extends Disposable implements ISession {
 		for (const chatId of this._additionalChats.keys()) {
 			if (!survivingPeers.has(chatId)) {
 				this._chatModelSelections.delete(chatId);
+				this._sharedReasoningByChatId.delete(chatId);
 				this._sessionOutput.releaseChat(URI.parse(buildChatUri(this.backendUri, chatId)));
 			}
 		}
@@ -1286,6 +1358,11 @@ export class AgentHostSessionAdapter extends Disposable implements ISession {
 			this._defaultChatStatusOverride.set(undefined, undefined);
 			if (this._additionalChats.size > 0) {
 				this._additionalChats.clearAndDisposeAll();
+			}
+			for (const chatId of this._sharedReasoningByChatId.keys()) {
+				if (chatId !== DEFAULT_CHAT_ID) {
+					this._sharedReasoningByChatId.delete(chatId);
+				}
 			}
 			if (this._chatsObs.get().length !== 1 || this._chatsObs.get()[0] !== this._defaultChat) {
 				transaction(tx => {
@@ -2760,6 +2837,8 @@ export abstract class BaseAgentHostSessionsProvider extends Disposable implement
 	protected readonly _onDidChangeSessionsImmediately = Event.any(this._onDidChangeSessions.event, this._onDidChangeSessionsFromNotifications.event);
 	readonly onDidChangeSessions = debounceSessionChangeEvents(this._onDidChangeSessionsFromNotifications.event, this._onDidChangeSessions.event, this._store);
 	protected readonly _onDidChangeDraftSessions = this._register(new Emitter<void>());
+	private readonly _onDidInvokeComputerUseTool = this._register(new Emitter<ISessionComputerUseInvocation>());
+	readonly onDidInvokeComputerUseTool = this._onDidInvokeComputerUseTool.event;
 
 	protected readonly _onDidReplaceSession = this._register(new Emitter<{ readonly from: ISession; readonly to: ISession }>());
 	readonly onDidReplaceSession: Event<{ readonly from: ISession; readonly to: ISession }> = this._onDidReplaceSession.event;
@@ -4691,8 +4770,9 @@ export abstract class BaseAgentHostSessionsProvider extends Disposable implement
 			hostLabel: this.label,
 			chat: backendChat,
 			connection,
+			thought: session.getComputerUseSharedReasoning(chatResource.fragment || DEFAULT_CHAT_ID),
 			getConnection: () => this.connection,
-			isEnabled: () => this.getMcpServers(sessionId).some(server => server.name === 'computer-use' && server.enabled),
+			isEnabled: () => session.capabilities.get().supportsComputerUseVideo === true,
 			cancelChat: () => this._chatService.cancelCurrentRequestForSession(chatResource, 'computerUseVideo'),
 		});
 	}
@@ -6267,7 +6347,12 @@ export abstract class BaseAgentHostSessionsProvider extends Disposable implement
 			if (e.rejectionReason) {
 				return;
 			}
-			if (e.action.type === ActionType.ChatTurnComplete && isChatAction(e.action)) {
+			if (isChatAction(e.action)) {
+				this._handleComputerUseSharedReasoning(e.channel, e.action);
+			}
+			if (e.action.type === ActionType.ChatToolCallReady && isChatAction(e.action)) {
+				this._handleComputerUseToolReady(e.channel, e.action);
+			} else if (e.action.type === ActionType.ChatTurnComplete && isChatAction(e.action)) {
 				this._keepChatSessionStateAlive(e.channel);
 				this._refreshSessions();
 			} else if (e.action.type === ActionType.SessionTitleChanged && isSessionAction(e.action)) {
@@ -6284,6 +6369,42 @@ export abstract class BaseAgentHostSessionsProvider extends Disposable implement
 				this._handleSessionMetaChanged(e.channel, e.action._meta);
 			}
 		}));
+	}
+
+	private _handleComputerUseSharedReasoning(channel: string, action: ChatAction): void {
+		const parsedChat = parseChatUri(channel);
+		if (!parsedChat) {
+			return;
+		}
+		const session = this._sessionCache.get(AgentSession.id(parsedChat.session));
+		session?.updateComputerUseSharedReasoning(parsedChat.chatId, action);
+	}
+
+	private _handleComputerUseToolReady(channel: string, action: IToolCallReadyAction): void {
+		const contributor = action.contributor;
+		const parsedChat = parseChatUri(channel);
+		if (!parsedChat) {
+			return;
+		}
+		const rawId = AgentSession.id(parsedChat.session);
+		const session = this._sessionCache.get(rawId);
+		if (!session) {
+			return;
+		}
+		const isComputerUseServer = readToolCallMeta(action).mcpServerName === 'computer-use'
+			|| (contributor?.kind === ToolCallContributorKind.MCP
+				&& this.getCustomizations(session.sessionId).some(customization =>
+					customization.type === CustomizationType.McpServer
+					&& customization.id === contributor.customizationId
+					&& customization.name === 'computer-use'));
+		if (!isComputerUseServer) {
+			return;
+		}
+		session.noteComputerUseVideoAvailable();
+		const chat = session.chats.get().find(candidate => (candidate.resource.fragment || DEFAULT_CHAT_ID) === parsedChat.chatId);
+		if (chat) {
+			this._onDidInvokeComputerUseTool.fire({ sessionId: session.sessionId, chatResource: chat.resource, turnId: action.turnId });
+		}
 	}
 
 	private _handleSessionAdded(summary: SessionSummary): void {

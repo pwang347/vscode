@@ -51,7 +51,7 @@ function renderNotice(context: ComponentFixtureContext, content: string, kind: A
 	}
 
 	const markdownRenderer = instantiationService.createInstance(ChatContentMarkdownRenderer);
-	const part = disposableStore.add(instantiationService.createInstance(ChatSystemNotificationContentPart, progress, markdownRenderer));
+	const part = disposableStore.add(instantiationService.createInstance(ChatSystemNotificationContentPart, progress, markdownRenderer, undefined));
 	if (expanded) {
 		part.domNode.querySelector<HTMLElement>('.chat-system-notification-disclosure-header')?.click();
 	}

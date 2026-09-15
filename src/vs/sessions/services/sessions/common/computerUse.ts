@@ -5,11 +5,19 @@
 
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { IDisposable } from '../../../../base/common/lifecycle.js';
+import { IObservable } from '../../../../base/common/observable.js';
+import { URI } from '../../../../base/common/uri.js';
 import { vArray, vBoolean, vEnum, vNumber, vObj, vOptionalProp, vString } from '../../../../base/common/validation.js';
 
 export interface IComputerUseVideoCursor {
 	readonly streamId: string;
 	readonly after: number;
+}
+
+/** Agent action point in normalized coordinates within the captured window. */
+export interface IComputerUseVideoFocus {
+	readonly x: number;
+	readonly y: number;
 }
 
 export interface IComputerUseVideoFrame {
@@ -18,6 +26,19 @@ export interface IComputerUseVideoFrame {
 	readonly duration: number;
 	readonly keyFrame: boolean;
 	readonly data: string;
+	readonly focus?: IComputerUseVideoFocus;
+}
+
+/** A normalized playback range where consecutive captured frames were identical. */
+export interface IComputerUseRecordingTimelineRange {
+	readonly startMs: number;
+	readonly durationMs: number;
+}
+
+/** A bounded keyframe-started sequence that decodes to one recording preview. */
+export interface IComputerUseRecordingPreview {
+	readonly config: IComputerUseVideoConfig;
+	readonly frames: readonly IComputerUseVideoFrame[];
 }
 
 export interface IComputerUseVideoConfig {
@@ -38,12 +59,39 @@ export interface IComputerUseVideoBatch {
 	readonly dropped?: boolean;
 }
 
-/** A live, read-only video connection bound to one host, session, and chat. */
+/** Ephemeral agent text that a provider explicitly shared with the client. */
+export interface IComputerUseSharedThought {
+	readonly source: 'reasoning' | 'activity';
+	readonly text: string;
+	readonly streaming: boolean;
+}
+
+/** A read-only live or recorded Computer Use video source. */
 export interface ISessionComputerUseVideoSource extends IDisposable {
 	readonly hostLabel: string;
+	/** Optional ephemeral thought/activity stream for this exact chat. */
+	readonly thought?: IObservable<IComputerUseSharedThought | undefined>;
+	/** Recorded sources replay host-owned footage and cannot stop an agent. */
+	readonly kind?: 'recording';
+	readonly title?: string;
+	readonly recordingDurationMs?: number;
+	readonly recordingPositionMs?: IObservable<number>;
 	read(cursor: IComputerUseVideoCursor | undefined, token: CancellationToken): Promise<IComputerUseVideoBatch>;
-	/** Stops the represented agent's work, not merely video playback. */
+	/** Stops the represented live agent's work; recorded sources implement this as a no-op. */
 	stop(): Promise<void>;
+	seek?(positionMs: number): void;
+	/** Reads unchanged-frame ranges without loading encoded video payloads. */
+	readRecordingTimeline?(token: CancellationToken): Promise<readonly IComputerUseRecordingTimelineRange[]>;
+	/** Reads a bounded keyframe-started sequence for a timeline preview. */
+	readRecordingPreview?(positionMs: number, token: CancellationToken): Promise<IComputerUseRecordingPreview | undefined>;
+	onFramePresented?(timestampUs: number): void;
+	onPlaybackEnded?(): void;
+}
+
+export interface ISessionComputerUseInvocation {
+	readonly sessionId: string;
+	readonly chatResource: URI;
+	readonly turnId: string;
 }
 
 const resourceValidator = vObj({
@@ -72,6 +120,7 @@ const batchValidator = vObj({
 		duration: vNumber(),
 		keyFrame: vBoolean(),
 		data: vString(),
+		focus: vOptionalProp(vObj({ x: vNumber(), y: vNumber() })),
 	}))),
 	dropped: vOptionalProp(vBoolean()),
 });
@@ -129,6 +178,10 @@ export function parseComputerUseVideoResource(value: unknown): IComputerUseVideo
 			|| !Number.isSafeInteger(frame.duration) || frame.duration < 1 || frame.duration > 1_000_000
 			|| !isBase64(frame.data, MAX_ENCODED_FRAME_LENGTH) || encodedBytes > MAX_ENCODED_BATCH_LENGTH) {
 			throw new Error('Invalid or oversized Computer Use video frame.');
+		}
+		if (frame.focus && (!Number.isFinite(frame.focus.x) || !Number.isFinite(frame.focus.y)
+			|| frame.focus.x < 0 || frame.focus.x > 1 || frame.focus.y < 0 || frame.focus.y > 1)) {
+			throw new Error('Invalid Computer Use video action focus.');
 		}
 		previousSequence = frame.sequence;
 		previousTimestamp = frame.timestamp;

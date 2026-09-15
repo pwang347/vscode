@@ -213,6 +213,11 @@ export interface IAgentWorkbenchLayoutService extends IWorkbenchLayoutService, I
 	isEditorPartAutoVisibilitySuppressed(): boolean;
 
 	/**
+	 * Prevents activating the minimized Sessions Part from resizing the editor.
+	 */
+	suppressSessionsPartActivationResize(): IDisposable;
+
+	/**
 	 * Changes docked detail visibility in response to a sash resize without
 	 * persisting it as an explicit user visibility preference.
 	 */
@@ -447,6 +452,7 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 	private _editorLastNonMaximizedSize: IViewSize | undefined;
 	private _restoreAttachedEditorMaximizedOnShow = false;
 	protected _editorPartAutoVisibilitySuppressionCount = 0;
+	private _sessionsPartActivationResizeSuppressionCount = 0;
 	protected _hasAppliedInitialEditorSplit = false;
 	private _sidePaneStateBeforeHide: ISidePaneState | undefined;
 	private _restoreSidePaneEditorMaximizedOnShow = false;
@@ -1120,11 +1126,23 @@ export class Workbench extends Disposable implements IAgentWorkbenchLayoutServic
 	}
 
 	private _restoreSessionsPartOnActivation(): void {
-		if (!this.workbenchGrid || !this.isVisible(Parts.EDITOR_PART, mainWindow)) {
+		if (this._sessionsPartActivationResizeSuppressionCount > 0 || !this.workbenchGrid || !this.isVisible(Parts.EDITOR_PART, mainWindow)) {
 			return;
 		}
 
 		this._restoreMinimizedPartOnActivation(this.sessionsPartView, this.editorPartView);
+	}
+
+	suppressSessionsPartActivationResize(): IDisposable {
+		this._sessionsPartActivationResizeSuppressionCount++;
+		let disposed = false;
+		return toDisposable(() => {
+			if (disposed) {
+				return;
+			}
+			disposed = true;
+			this._sessionsPartActivationResizeSuppressionCount--;
+		});
 	}
 
 	private _restoreEditorPartOnActivation(): void {

@@ -9,7 +9,7 @@ import { errorHandler } from '../../../../../base/common/errors.js';
 import { isEqual } from '../../../../../base/common/resources.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../../base/common/network.js';
-import { ISettableObservable, observableValue, transaction } from '../../../../../base/common/observable.js';
+import { constObservable, ISettableObservable, observableValue, transaction } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { Codicon } from '../../../../../base/common/codicons.js';
@@ -37,6 +37,8 @@ import { CHANGES_VIEW_CONTAINER_ID, CHANGES_VIEW_ID } from '../../../changes/com
 import '../../../changes/browser/changesActions.js';
 import { SESSIONS_FILES_CONTAINER_ID } from '../../../files/browser/files.contribution.js';
 import { NewChangesTabAction, NewFileTabAction } from '../../../editor/browser/addTabActions.js';
+import { ComputerUseEditorInput } from '../../../computerUse/browser/computerUseEditorInput.js';
+import { TestVideoSource } from '../../../computerUse/test/browser/computerUseTestUtils.js';
 import { createTestHarness, ICreateOptions, ITestLayoutHarness, makeChange, makeSession, TestStubEditorInput } from './layoutControllerTestUtils.js';
 import '../../../editor/browser/editor.contribution.js';
 
@@ -188,6 +190,62 @@ suite('LayoutController (desktop)', () => {
 		});
 	});
 
+	test('[classic] Computer Use hides the side pane only while its editor is active', () => {
+		const controller = createController({ activateAux: true, revealAuxiliaryBarOnOpen: true });
+		const session = makeSession(URI.parse('session:computer-use-classic'));
+		harness.activeSessionObs.set(session, undefined);
+		harness.layoutService.setPartHidden(false, Parts.AUXILIARYBAR_PART);
+		const input = store.add(new ComputerUseEditorInput(
+			{ providerId: 'test', sessionId: session.sessionId, chatResource: session.activeChat.get().resource },
+			constObservable('Session'), constObservable('Chat'), new TestVideoSource(),
+		));
+		harness.activeEditorInput = input;
+		harness.onDidActiveEditorChange.fire();
+		const during = harness.partVisibility.get(Parts.AUXILIARYBAR_PART);
+		harness.layoutService.setPartHidden(false, Parts.AUXILIARYBAR_PART);
+		const reconciled = harness.partVisibility.get(Parts.AUXILIARYBAR_PART);
+		harness.activeEditorInput = makeFileEditor();
+		harness.onDidActiveEditorChange.fire();
+
+		assert.deepStrictEqual({
+			during,
+			reconciled,
+			restored: harness.partVisibility.get(Parts.AUXILIARYBAR_PART),
+			saved: controller.getViewState(session.resource)?.auxiliaryBarVisible,
+			opened: harness.openedViewContainers,
+		}, {
+			during: false,
+			reconciled: false,
+			restored: true,
+			saved: true,
+			opened: [SESSIONS_FILES_CONTAINER_ID],
+		});
+	});
+
+	test('[classic] Computer Use preserves an already hidden side pane', () => {
+		const controller = createController({ revealAuxiliaryBarOnOpen: true });
+		const session = makeSession(URI.parse('session:computer-use-hidden'));
+		harness.activeSessionObs.set(session, undefined);
+		const input = store.add(new ComputerUseEditorInput(
+			{ providerId: 'test', sessionId: session.sessionId, chatResource: session.activeChat.get().resource },
+			constObservable('Session'), constObservable('Chat'), new TestVideoSource(),
+		));
+		harness.activeEditorInput = input;
+		harness.onDidActiveEditorChange.fire();
+		harness.activeEditorInput = makeFileEditor();
+		harness.onDidActiveEditorChange.fire();
+
+		assert.deepStrictEqual({
+			visible: harness.partVisibility.get(Parts.AUXILIARYBAR_PART),
+			saved: controller.getViewState(session.resource)?.auxiliaryBarVisible,
+			opened: harness.openedViewContainers,
+		}, {
+			visible: false,
+			saved: undefined,
+			opened: [],
+		});
+	});
+
 	test('[D3d] does not switch a side pane that is already showing Files when a change lands', () => {
 		createController();
 		const session = makeSession(URI.parse('session:1'), { status: SessionStatus.Untitled });
@@ -332,6 +390,48 @@ suite('LayoutController (desktop)', () => {
 			visibilityRestores: [],
 		});
 	});
+
+	for (const isCreated of [false, true]) {
+		for (const detailsVisible of [false, true]) {
+			test(`[single-pane] Computer Use hides details without changing the saved composition (created=${isCreated}, visible=${detailsVisible})`, async () => {
+				createSinglePaneController({ activateAux: true });
+				await timeout(0);
+				const session = makeSession(URI.parse('session:computer-use'), {
+					isCreated, status: isCreated ? SessionStatus.Completed : SessionStatus.Untitled,
+				});
+				const initialEditor = store.add(new TestStubEditorInput(URI.file('/repo/initial.txt')));
+				harness.activeGroupEditors.push(initialEditor);
+				harness.activeEditorInput = initialEditor;
+				harness.activeSessionObs.set(session, undefined);
+				harness.visibleSessionsObs.set([session], undefined);
+				await timeout(0);
+				harness.layoutService.setPartHidden(!detailsVisible, Parts.AUXILIARYBAR_PART);
+				harness.layoutService.setPartHidden(false, Parts.EDITOR_PART);
+				const input = store.add(new ComputerUseEditorInput(
+					{ providerId: 'test', sessionId: session.sessionId, chatResource: session.activeChat.get().resource },
+					constObservable('Session'), constObservable('Chat'), new TestVideoSource(),
+				));
+				harness.activeGroupEditors.push(input);
+				harness.activeEditorInput = input;
+				harness.onDidActiveEditorChange.fire();
+				await timeout(0);
+				const during = {
+					details: harness.partVisibility.get(Parts.AUXILIARYBAR_PART),
+					editor: harness.partVisibility.get(Parts.EDITOR_PART),
+					toggle: harness.contextKeyService.getContextKeyValue(HasDockedDetailsContext.key),
+				};
+				harness.activeEditorInput = makeDiffEditor();
+				harness.onDidActiveEditorChange.fire();
+				await timeout(0);
+				assert.deepStrictEqual({
+					during, restoredDetails: harness.partVisibility.get(Parts.AUXILIARYBAR_PART),
+				}, {
+					during: { details: false, editor: true, toggle: false },
+					restoredDetails: detailsVisible,
+				});
+			});
+		}
+	}
 
 	test('[single-pane] hides details for self-contained editors and restores them for files', async () => {
 		createSinglePaneController({ activateAux: true });

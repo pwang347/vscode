@@ -86,6 +86,7 @@ suite('Sessions - Workbench', () => {
 	const isVisible = Workbench.prototype.isVisible as (this: ITestWorkbench, part: Parts) => boolean;
 	const toggleSecondarySideBar = Workbench.prototype.toggleSecondarySideBar as (this: ITestWorkbench) => void;
 	const restoreSessionsPartOnActivation = Reflect.get(Workbench.prototype, '_restoreSessionsPartOnActivation') as (this: ITestWorkbench) => void;
+	const suppressSessionsPartActivationResize = Workbench.prototype.suppressSessionsPartActivationResize as (this: ITestWorkbench) => IDisposable;
 	const restoreEditorPartOnActivation = Reflect.get(Workbench.prototype, '_restoreEditorPartOnActivation') as (this: ITestWorkbench) => void;
 	const layoutGrid = Reflect.get(Workbench.prototype, '_layoutGrid') as (this: IContainerResizeTestHarness) => void;
 	const layoutSinglePaneGrid = Reflect.get(SinglePaneWorkbench.prototype, '_layoutGrid') as (this: IContainerResizeTestHarness) => void;
@@ -105,6 +106,7 @@ suite('Sessions - Workbench', () => {
 		_editorMaximized: boolean;
 		_editorRevealedExplicitly: boolean;
 		_editorPartAutoVisibilitySuppressionCount: number;
+		_sessionsPartActivationResizeSuppressionCount: number;
 		_restoreAttachedEditorMaximizedOnShow: boolean;
 		_restoreSidePaneEditorMaximizedOnShow: boolean;
 		_hasAppliedInitialEditorSplit: boolean;
@@ -313,6 +315,7 @@ suite('Sessions - Workbench', () => {
 			_editorRevealedExplicitly: false,
 			_editorMaximized: false,
 			_editorPartAutoVisibilitySuppressionCount: options.suppressionCount ?? 0,
+			_sessionsPartActivationResizeSuppressionCount: 0,
 			_restoreAttachedEditorMaximizedOnShow: false,
 			_restoreSidePaneEditorMaximizedOnShow: false,
 			editorGroupService: options.editorGroupService,
@@ -488,6 +491,20 @@ suite('Sessions - Workbench', () => {
 			[],
 			[],
 		]);
+	});
+
+	test('suppressing Sessions Part activation resize preserves the minimized composition', () => {
+		const host = createHost({ sessionsWidth: 300, editorWidth: 700, partVisibility: { editor: true } });
+		const first = suppressSessionsPartActivationResize.call(host);
+		const second = suppressSessionsPartActivationResize.call(host);
+
+		restoreSessionsPartOnActivation.call(host);
+		first.dispose();
+		restoreSessionsPartOnActivation.call(host);
+		second.dispose();
+		restoreSessionsPartOnActivation.call(host);
+
+		assert.deepStrictEqual(host.resizes, [{ width: 300, height: 800 }]);
 	});
 
 	test('tracks editor pane visibility across editor and auxiliary bar changes', () => {

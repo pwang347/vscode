@@ -20,6 +20,7 @@ import { getToolKind } from '../../../../../../platform/agentHost/common/state/s
 import { readToolCallMeta } from '../../../../../../platform/agentHost/common/meta/agentToolCallMeta.js';
 import { getChatErrorDetailsFromMeta, IChatErrorContext } from '../../../common/chatErrorMessages.js';
 import { AGENT_HOST_SCHEME, createAgentHostResourceUriMapper, type IAgentHostResourceUriMapper, toAgentHostContentUri, toAgentHostUri } from '../../../../../../platform/agentHost/common/agentHostUri.js';
+import { OPEN_COMPUTER_USE_RECORDING_COMMAND_ID } from '../../../../../../platform/agentHost/common/computerUseRecording.js';
 import { AgentHostElementAttachmentDisplayKind, getElementAttachmentCorrelationId } from '../../../../../../platform/agentHost/common/meta/agentElementAttachments.js';
 import { AgentHostAutoReplyAnswer } from '../../../../../../platform/agentHost/common/agentHostSchema.js';
 import { SessionServerToolName } from '../../../../../../platform/agentHost/common/serverToolNames.js';
@@ -543,9 +544,62 @@ export function systemNotificationToChatPart(content: StringOrMarkdown | undefin
 			return { kind: 'systemNotification', content: markdown, icon: Codicon.circleSlash, renderInlineTiming: true };
 		case AgentSystemNotificationKind.AgentMergePullRequestMerged:
 			return { kind: 'systemNotification', content: markdown, icon: Codicon.gitMerge, renderInlineTiming: true };
+		case AgentSystemNotificationKind.ComputerUseRecording: {
+			if (!meta.recordingUri || meta.durationMs === undefined || meta.durationMs <= 0 || meta.sizeBytes === undefined || meta.sizeBytes <= 0) {
+				return { kind: 'systemNotification', content: markdown };
+			}
+			let recordingUri: URI;
+			try {
+				const parsed = URI.parse(meta.recordingUri);
+				if (parsed.scheme !== Schemas.file || parsed.query || parsed.fragment) {
+					return { kind: 'systemNotification', content: markdown };
+				}
+				recordingUri = toAgentHostContentUri(parsed, connectionAuthority);
+			} catch {
+				return { kind: 'systemNotification', content: markdown };
+			}
+			const totalSeconds = Math.max(0, Math.round(meta.durationMs / 1000));
+			const minutes = Math.floor(totalSeconds / 60);
+			const seconds = totalSeconds % 60;
+			const duration = localize('agentHost.computerUseRecording.duration', "{0}:{1}", minutes, String(seconds).padStart(2, '0'));
+			const title = meta.recordingTitle ?? localize('agentHost.computerUseRecording.title', "Computer Use recording");
+			return {
+				kind: 'systemNotification',
+				content: new MarkdownString(title),
+				icon: Codicon.playCircle,
+				presentation: 'computerUseRecording',
+				accessibilityLabel: meta.trimmed
+					? localize('agentHost.computerUseRecording.accessibleTrimmed', "{0}. Computer Use video recording, last {1}.", title, duration)
+					: localize('agentHost.computerUseRecording.accessible', "{0}. Computer Use video recording, {1}.", title, duration),
+				computerUseRecording: {
+					title,
+					durationMs: meta.durationMs,
+					trimmed: meta.trimmed ?? false,
+					recordingUri,
+					command: {
+						id: OPEN_COMPUTER_USE_RECORDING_COMMAND_ID,
+						title: localize('agentHost.computerUseRecording.play', "Play {0}", title),
+						tooltip: localize('agentHost.computerUseRecording.tooltip', "Open this host-recorded Computer Use session in the Computer Use player."),
+						arguments: [recordingUri.toString(), title],
+					},
+				},
+			};
+		}
 		default:
 			return { kind: 'systemNotification', content: markdown };
 	}
+}
+
+function computerUseRecordingProgress(turn: Turn, connectionAuthority: string): IChatProgress | undefined {
+	const responsePart = turn.responseParts.find(part => part.kind === ResponsePartKind.SystemNotification
+		&& readAgentSystemNotificationMeta(part).kind === AgentSystemNotificationKind.ComputerUseRecording);
+	if (responsePart?.kind === ResponsePartKind.SystemNotification) {
+		return systemNotificationToChatPart(responsePart.content, connectionAuthority, responsePart._meta);
+	}
+	const messageMeta = readAgentSystemNotificationMeta(turn.message);
+	return messageMeta.kind === AgentSystemNotificationKind.ComputerUseRecording
+		? systemNotificationToChatPart(messageMeta.recordingTitle ?? turn.message.text, connectionAuthority, turn.message._meta)
+		: undefined;
 }
 
 /**
@@ -959,6 +1013,13 @@ export function usageInfoToQuotas(usage: UsageInfo | undefined): IAgentHostQuota
 export function turnsToHistory(backendSession: URI, turns: readonly Turn[], participantId: string, connectionAuthority: string, lookup?: TurnModelLookup, errorContext?: IChatErrorContext, terminalCommandPrefix?: string, resourceUris: IAgentHostResourceUriMapper = createAgentHostResourceUriMapper(connectionAuthority), logicalSessionScheme: string = backendSession.scheme, errorDetailsProvider?: (turn: Turn) => IChatResponseErrorDetails | undefined): IChatSessionHistoryItem[] {
 	const history: IChatSessionHistoryItem[] = [];
 	for (const turn of turns) {
+		const recordingProgress = computerUseRecordingProgress(turn, connectionAuthority);
+		const previousIndex = recordingProgress ? history.findLastIndex(item => item.type === 'response') : -1;
+		const previous = previousIndex >= 0 ? history[previousIndex] : undefined;
+		if (recordingProgress && previous?.type === 'response') {
+			history[previousIndex] = { ...previous, parts: [...previous.parts, recordingProgress] };
+			continue;
+		}
 		const rawModelId = turn.usage?.model;
 		const modelId = lookup?.toLanguageModelId(turn.message.model?.id ?? rawModelId);
 		const details = lookup?.toResponseDetails(rawModelId, turn.usage);

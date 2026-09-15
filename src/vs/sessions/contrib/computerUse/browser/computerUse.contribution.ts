@@ -11,10 +11,16 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { EditorPaneDescriptor, IEditorPaneRegistry } from '../../../../workbench/browser/editor.js';
 import { EditorExtensions } from '../../../../workbench/common/editor.js';
+import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { ComputerUseEditor } from './computerUseEditor.js';
 import { ComputerUseEditorInput } from './computerUseEditorInput.js';
 import { ComputerUseAccessibilityHelp, ComputerUseAccessibleView } from './computerUseAccessibility.js';
 import { COMPUTER_USE_ACCESSIBILITY_VERBOSITY } from './computerUseContext.js';
+import { ComputerUseAutoOpenContribution } from './computerUseAutoOpen.js';
+import { ComputerUseLayoutController } from './computerUseLayout.js';
+
+registerWorkbenchContribution2(ComputerUseLayoutController.ID, ComputerUseLayoutController, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(ComputerUseAutoOpenContribution.ID, ComputerUseAutoOpenContribution, WorkbenchPhase.AfterRestored);
 
 Registry.as<IEditorPaneRegistry>(EditorExtensions.EditorPane).registerEditorPane(
 	EditorPaneDescriptor.create(ComputerUseEditor, ComputerUseEditor.ID, localize('computerUse.editor', "Computer Use")),
@@ -31,7 +37,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 			type: 'boolean',
 			default: true,
 			tags: ['accessibility'],
-			description: localize('computerUse.verbosity', "Provide information about how to access Computer Use accessibility help when the live video viewer is focused."),
+			description: localize('computerUse.verbosity', "Provide information about how to access Computer Use accessibility help when the video player is focused."),
 		},
 	},
 });

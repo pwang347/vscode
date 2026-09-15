@@ -22,9 +22,15 @@
 	border: var(--vscode-strokeThickness) solid var(--vscode-contrastBorder, transparent);
 }
 
-.computer-use-player:focus-visible {
+.monaco-workbench .computer-use-player:focus-visible {
 	outline: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
-	outline-offset: calc(-1 * var(--vscode-strokeThickness));
+	outline-offset: -2px;
+}
+
+.agent-sessions-workbench .computer-use-player {
+	border-width: 0;
+	border-bottom-left-radius: calc(var(--vscode-cornerRadius-large) - var(--vscode-strokeThickness));
+	border-bottom-right-radius: calc(var(--vscode-cornerRadius-large) - var(--vscode-strokeThickness));
 }
 
 .computer-use-player .computer-use-header {
@@ -35,14 +41,7 @@
 	flex-shrink: 0;
 }
 
-.computer-use-player .computer-use-identity {
-	flex: 1;
-	min-width: 0;
-}
-
 .computer-use-player .computer-use-host,
-.computer-use-player .computer-use-session,
-.computer-use-player .computer-use-target,
 .computer-use-player .computer-use-status {
 	min-width: 0;
 	overflow: hidden;
@@ -50,30 +49,220 @@
 	text-overflow: ellipsis;
 }
 
-.computer-use-player .computer-use-host,
-.computer-use-player .computer-use-target,
-.computer-use-player .computer-use-viewing-note {
+.computer-use-player .computer-use-host {
+	flex: 1;
 	color: var(--vscode-descriptionForeground);
 	font-size: var(--vscode-fontSize-body2);
 }
 
-.computer-use-player .computer-use-session {
-	margin: var(--vscode-spacing-size40) 0 0;
-	font-size: var(--vscode-fontSize-heading3);
-	font-weight: var(--vscode-fontWeight-semiBold);
+.computer-use-player .computer-use-follow-status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
 }
 
-.computer-use-player .computer-use-stop {
+.computer-use-player .computer-use-timeline {
+	position: relative;
+	padding: var(--vscode-spacing-size80) var(--vscode-spacing-size160) var(--vscode-spacing-size120);
 	flex-shrink: 0;
+}
+
+.computer-use-player .computer-use-timeline-row {
+	display: flex;
+	align-items: center;
+	gap: var(--vscode-spacing-size80);
+}
+
+.computer-use-player .computer-use-timeline-track {
+	position: relative;
+	flex: 1;
+	height: var(--vscode-spacing-size200);
+	min-width: 0;
+	cursor: pointer;
+}
+
+.computer-use-player .computer-use-timeline-input {
+	position: absolute;
+	z-index: 2;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+
+.computer-use-player .computer-use-timeline-rail {
+	position: absolute;
+	top: 50%;
+	right: 0;
+	left: 0;
+	height: var(--vscode-spacing-size40);
+	overflow: visible;
+	background: color-mix(in srgb, var(--vscode-foreground) 20%, transparent);
+	border-radius: var(--vscode-cornerRadius-circle);
+	transform: translateY(-50%);
+}
+
+.computer-use-player .computer-use-timeline-track:hover .computer-use-timeline-rail,
+.computer-use-player .computer-use-timeline-input:focus-visible + .computer-use-timeline-rail {
+	height: var(--vscode-spacing-size60);
+}
+
+.computer-use-player .computer-use-timeline-input:focus-visible + .computer-use-timeline-rail {
+	outline: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
+	outline-offset: calc(-1 * var(--vscode-strokeThickness));
+}
+
+.computer-use-player .computer-use-timeline-progress,
+.computer-use-player .computer-use-timeline-inactive-markers {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	border-radius: inherit;
+}
+
+.computer-use-player .computer-use-timeline-progress {
+	z-index: 1;
+	width: 0;
+	background: var(--vscode-progressBar-background);
+}
+
+.computer-use-player .computer-use-timeline-inactive-markers {
+	z-index: 2;
+}
+
+.computer-use-player .computer-use-timeline-inactive {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	min-width: var(--vscode-strokeThickness);
+	background: color-mix(in srgb, var(--vscode-editor-background) 78%, transparent);
+}
+
+.computer-use-player .computer-use-timeline-thumb {
+	position: absolute;
+	z-index: 3;
+	top: 50%;
+	left: 0;
+	width: var(--vscode-spacing-size120);
+	height: var(--vscode-spacing-size120);
+	background: var(--vscode-progressBar-background);
+	border: var(--vscode-strokeThickness) solid var(--vscode-editor-background);
+	border-radius: var(--vscode-cornerRadius-circle);
+	opacity: 0;
+	transform: translate(-50%, -50%);
+}
+
+.computer-use-player .computer-use-timeline-track:hover .computer-use-timeline-thumb,
+.computer-use-player .computer-use-timeline-input:focus-visible + .computer-use-timeline-rail .computer-use-timeline-thumb,
+.computer-use-player .computer-use-timeline.is-preview-visible .computer-use-timeline-thumb {
+	opacity: 1;
+}
+
+.computer-use-player .computer-use-timeline-label {
+	flex-shrink: 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--vscode-fontSize-body2);
+	font-variant-numeric: tabular-nums;
+}
+
+.computer-use-player .computer-use-timeline-preview {
+	position: absolute;
+	z-index: 4;
+	bottom: calc(100% + var(--vscode-spacing-size80));
+	box-sizing: border-box;
+	width: min(220px, calc(100% - 2 * var(--vscode-spacing-size160)));
+	overflow: hidden;
+	background: var(--vscode-editorWidget-background);
+	border: var(--vscode-strokeThickness) solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+	border-radius: var(--vscode-cornerRadius-large);
+	box-shadow: 0 var(--vscode-spacing-size20) var(--vscode-spacing-size80) var(--vscode-widget-shadow);
+	opacity: 0;
+	visibility: hidden;
+	transform: translate(-50%, var(--vscode-spacing-size40));
+	pointer-events: none;
+}
+
+.computer-use-player .computer-use-timeline.is-preview-visible .computer-use-timeline-preview {
+	opacity: 1;
+	visibility: visible;
+	transform: translate(-50%, 0);
+}
+
+.computer-use-player.is-hud-animated .computer-use-timeline-preview,
+.computer-use-player.is-hud-animated .computer-use-timeline-thumb {
+	transition: opacity 120ms ease-out, transform 120ms ease-out, visibility 120ms;
+}
+
+.computer-use-player .computer-use-timeline-preview-frame {
+	position: relative;
+	display: grid;
+	place-items: center;
+	aspect-ratio: 16 / 9;
+	overflow: hidden;
+	background: var(--vscode-editor-background);
+}
+
+.computer-use-player .computer-use-timeline-preview-canvas {
+	display: none;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.computer-use-player .computer-use-timeline-preview-canvas.is-visible {
+	display: block;
+}
+
+.computer-use-player .computer-use-timeline-preview-status {
+	position: absolute;
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--vscode-fontSize-label2);
+}
+
+.computer-use-player .computer-use-timeline-preview-canvas.is-visible + .computer-use-timeline-preview-status {
+	display: none;
+}
+
+.computer-use-player .computer-use-timeline-preview-inactive {
+	position: absolute;
+	right: var(--vscode-spacing-size60);
+	bottom: var(--vscode-spacing-size60);
+	padding: var(--vscode-spacing-size20) var(--vscode-spacing-size40);
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--vscode-fontSize-label3);
+	background: var(--vscode-editorWidget-background);
+	border: var(--vscode-strokeThickness) solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+	border-radius: var(--vscode-cornerRadius-small);
+}
+
+.computer-use-player .computer-use-timeline-preview-time {
+	display: block;
+	padding: var(--vscode-spacing-size40) var(--vscode-spacing-size80);
+	color: var(--vscode-foreground);
+	font-size: var(--vscode-fontSize-label2);
+	font-variant-numeric: tabular-nums;
 }
 
 .computer-use-player .computer-use-stage {
 	flex: 1;
 	min-height: 0;
 	position: relative;
-	margin: 0 var(--vscode-spacing-size160);
+	isolation: isolate;
+	box-sizing: border-box;
+	margin: 0 var(--vscode-spacing-size160) var(--vscode-spacing-size120);
+	overflow: hidden;
+	border: var(--vscode-strokeThickness) solid transparent;
 	border-radius: var(--vscode-cornerRadius-medium);
 	background: var(--vscode-editorWidget-background);
+}
+
+.computer-use-player.is-live .computer-use-stage {
+	border-color: var(--vscode-charts-green, var(--vscode-debugIcon-startForeground, var(--vscode-foreground)));
 }
 
 .computer-use-player .computer-use-video {
@@ -82,52 +271,411 @@
 	height: 100%;
 	inset: 0;
 	object-fit: contain;
+	opacity: 0;
+}
+
+.computer-use-player.has-frame .computer-use-video {
+	opacity: 1;
+	cursor: pointer;
+}
+
+.computer-use-player .computer-use-playback-feedback {
+	position: absolute;
+	z-index: 4;
+	top: 50%;
+	left: 50%;
+	display: grid;
+	place-items: center;
+	width: var(--vscode-spacing-size400);
+	height: var(--vscode-spacing-size400);
+	color: var(--vscode-foreground);
+	background: color-mix(in srgb, var(--vscode-editor-background) 58%, transparent);
+	border: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 18%, transparent);
+	border-radius: var(--vscode-cornerRadius-circle);
+	opacity: 0;
+	visibility: hidden;
+	transform: translate(-50%, -50%) scale(0.9);
+	pointer-events: none;
+}
+
+.computer-use-player .computer-use-playback-feedback.is-visible {
+	opacity: 0.72;
+	visibility: visible;
+	transform: translate(-50%, -50%) scale(1);
+}
+
+.computer-use-player .computer-use-playback-feedback-icon {
+	font-size: var(--vscode-codiconFontSize);
+}
+
+.computer-use-player.is-hud-animated .computer-use-playback-feedback {
+	transition: opacity 180ms ease-out, transform 180ms ease-out, visibility 180ms;
+}
+
+.computer-use-player .computer-use-annotation-canvas {
+	position: absolute;
+	z-index: 1;
+	display: none;
+	width: 100%;
+	height: 100%;
+	inset: 0;
+	object-fit: contain;
+	touch-action: none;
+	cursor: crosshair;
+}
+
+.computer-use-player .computer-use-annotation-canvas.is-visible {
+	display: block;
+}
+
+.computer-use-player .computer-use-annotation-canvas:focus-visible {
+	outline: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
+	outline-offset: calc(-1 * var(--vscode-strokeThickness));
+}
+
+.computer-use-player .computer-use-annotation-cursor {
+	position: absolute;
+	z-index: 2;
+	display: none;
+	width: var(--vscode-spacing-size120);
+	height: var(--vscode-spacing-size120);
+	border: var(--vscode-strokeThickness) solid var(--vscode-focusBorder);
+	border-radius: var(--vscode-cornerRadius-circle);
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+.computer-use-player .computer-use-annotation-cursor.is-visible {
+	display: block;
+}
+
+.computer-use-player .computer-use-annotation-cursor.is-drawing {
+	background: color-mix(in srgb, var(--vscode-focusBorder) 35%, transparent);
+}
+
+.computer-use-player.is-annotating .computer-use-video,
+.computer-use-player.is-annotating .computer-use-playback-feedback,
+.computer-use-player.is-annotating .computer-use-status,
+.computer-use-player.is-annotating .computer-use-thought {
+	visibility: hidden;
+}
+
+.computer-use-player.is-annotating .computer-use-timeline {
+	visibility: hidden;
 }
 
 .computer-use-player .computer-use-state-message {
 	position: absolute;
 	inset: 0;
 	display: flex;
+	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	gap: var(--vscode-spacing-size120);
 	padding: var(--vscode-spacing-size200);
+	color: var(--vscode-descriptionForeground);
 	text-align: center;
 	overflow-wrap: anywhere;
 }
 
-.computer-use-player.has-frame .computer-use-state-message {
-	inset: auto var(--vscode-spacing-size120) var(--vscode-spacing-size120);
-	padding: var(--vscode-spacing-size80) var(--vscode-spacing-size120);
-	background: var(--vscode-editorWidget-background);
-	border: var(--vscode-strokeThickness) solid var(--vscode-contrastBorder, transparent);
-	border-radius: var(--vscode-cornerRadius-medium);
+.computer-use-player .computer-use-state-message-icon {
+	font-size: var(--vscode-codiconFontSize-compact);
 }
 
-.computer-use-player.is-live .computer-use-state-message {
+.computer-use-player .computer-use-state-message-icon[hidden] {
 	display: none;
 }
 
-.computer-use-player .computer-use-footer {
-	display: flex;
-	flex-direction: column;
-	gap: var(--vscode-spacing-size60);
-	padding: var(--vscode-spacing-size120) var(--vscode-spacing-size160);
-	flex-shrink: 0;
+.computer-use-player.has-frame .computer-use-state-message {
+	display: none;
 }
 
-.computer-use-player .computer-use-controls {
-	display: flex;
-	align-items: center;
-	flex-wrap: wrap;
-	gap: var(--vscode-spacing-size80);
+.computer-use-player .computer-use-thought {
+	position: absolute;
+	z-index: 3;
+	top: var(--vscode-spacing-size400);
+	left: 50%;
+	box-sizing: border-box;
+	width: max-content;
+	max-width: min(560px, calc(100% - 2 * var(--vscode-spacing-size160)));
+	padding: var(--vscode-spacing-size120) var(--vscode-spacing-size160);
+	border: var(--vscode-strokeThickness) solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+	border-radius: var(--vscode-cornerRadius-large);
+	background: color-mix(in srgb, var(--vscode-editorWidget-background) 92%, transparent);
+	box-shadow: 0 var(--vscode-spacing-size40) var(--vscode-spacing-size160) var(--vscode-widget-shadow);
+	opacity: 0;
+	visibility: hidden;
+	transform: translate(-50%, calc(-1 * var(--vscode-spacing-size40))) scale(0.98);
+	pointer-events: none;
+}
+
+.computer-use-player .computer-use-thought::before,
+.computer-use-player .computer-use-thought::after {
+	content: '';
+	position: absolute;
+	border: var(--vscode-strokeThickness) solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+	border-radius: var(--vscode-cornerRadius-circle);
+	background: var(--vscode-editorWidget-background);
+}
+
+.computer-use-player .computer-use-thought::before {
+	bottom: calc(-1 * var(--vscode-spacing-size60));
+	left: var(--vscode-spacing-size200);
+	width: var(--vscode-spacing-size60);
+	height: var(--vscode-spacing-size60);
+}
+
+.computer-use-player .computer-use-thought::after {
+	bottom: calc(-1 * var(--vscode-spacing-size120));
+	left: var(--vscode-spacing-size160);
+	width: var(--vscode-spacing-size40);
+	height: var(--vscode-spacing-size40);
+}
+
+.computer-use-player .computer-use-thought.is-visible {
+	opacity: 1;
+	visibility: visible;
+	transform: translate(-50%, 0) scale(1);
+}
+
+.computer-use-player .computer-use-thought-label {
+	margin-bottom: var(--vscode-spacing-size40);
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--vscode-fontSize-label2);
+	font-weight: var(--vscode-fontWeight-semiBold);
+}
+
+.computer-use-player .computer-use-thought-message {
+	display: -webkit-box;
+	overflow: hidden;
+	color: var(--vscode-foreground);
+	line-height: 1.4;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+}
+
+.computer-use-player.is-hud-animated .computer-use-thought {
+	transition: opacity 180ms ease-out, transform 180ms ease-out, visibility 180ms;
+}
+
+.computer-use-player.is-hud-animated .computer-use-thought.is-streaming .computer-use-thought-label {
+	background: linear-gradient(90deg, var(--vscode-descriptionForeground) 20%, var(--vscode-foreground) 50%, var(--vscode-descriptionForeground) 80%);
+	background-clip: text;
+	background-size: 200% 100%;
+	color: transparent;
+	animation: computer-use-thought-shimmer 1.8s linear infinite;
+}
+
+@keyframes computer-use-thought-shimmer {
+	from {
+		background-position: 200% 0;
+	}
+
+	to {
+		background-position: -200% 0;
+	}
 }
 
 .computer-use-player .computer-use-status {
-	flex: 1;
+	position: absolute;
+	z-index: 2;
+	top: var(--vscode-spacing-size120);
+	left: var(--vscode-spacing-size120);
+	display: flex;
+	align-items: center;
+	gap: var(--vscode-spacing-size40);
+	box-sizing: border-box;
+	max-width: calc(100% - 2 * var(--vscode-spacing-size120));
+	padding: var(--vscode-spacing-size40) var(--vscode-spacing-size80);
+	overflow: hidden;
+	border: var(--vscode-strokeThickness) solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+	border-radius: var(--vscode-cornerRadius-circle);
+	background: var(--vscode-editorWidget-background);
+	box-shadow: 0 var(--vscode-spacing-size20) var(--vscode-spacing-size80) var(--vscode-widget-shadow);
+	color: var(--vscode-descriptionForeground);
+	font-size: var(--vscode-fontSize-label2);
+	font-weight: var(--vscode-fontWeight-semiBold);
+	opacity: 1;
+}
+
+.computer-use-player:not(.has-frame) .computer-use-status {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.computer-use-player .computer-use-status-icon {
+	flex: 0 0 auto;
+	color: inherit;
+	font-size: var(--vscode-codiconFontSize-compact);
+}
+
+.computer-use-player .computer-use-status-text {
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.computer-use-player.is-live .computer-use-status {
+	color: var(--vscode-charts-green, var(--vscode-debugIcon-startForeground, var(--vscode-foreground)));
+}
+
+.computer-use-player.is-live-indicator-animated .computer-use-status-icon {
+	animation: computer-use-live-indicator-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes computer-use-live-indicator-pulse {
+	0%,
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+
+	50% {
+		opacity: 0.55;
+		transform: scale(0.75);
+	}
+}
+
+.computer-use-player.is-stopped .computer-use-status,
+.computer-use-player.is-last-frame .computer-use-status {
+	color: var(--vscode-descriptionForeground);
+	font-weight: var(--vscode-fontWeight-regular);
+}
+
+.computer-use-player .computer-use-controls {
+	position: absolute;
+	z-index: 2;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--vscode-spacing-size80);
+	box-sizing: border-box;
+	padding: var(--vscode-spacing-size320) var(--vscode-spacing-size120) var(--vscode-spacing-size120);
+	background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--vscode-editor-background) 88%, transparent));
+	opacity: 1;
+	transform: translateY(0);
+	pointer-events: none;
+}
+
+.computer-use-player.has-frame.is-live:not(.is-controls-visible) .computer-use-controls {
+	opacity: 0;
+	transform: translateY(var(--vscode-spacing-size40));
+}
+
+.computer-use-player.has-frame.is-live:not(.is-controls-visible) .computer-use-toolbar {
+	pointer-events: none;
+}
+
+.computer-use-player.has-frame.is-live:not(.is-controls-visible) .computer-use-controls:hover,
+.computer-use-player.has-frame.is-live:not(.is-controls-visible) .computer-use-controls:focus-within {
+	opacity: 1;
+	transform: translateY(0);
+}
+
+.computer-use-player.has-frame.is-live:not(.is-controls-visible) .computer-use-controls:focus-within .computer-use-toolbar {
+	pointer-events: auto;
+}
+
+.computer-use-player.is-hud-animated .computer-use-video,
+.computer-use-player.is-hud-animated .computer-use-status,
+.computer-use-player.is-hud-animated .computer-use-controls {
+	transition: opacity 120ms ease-out, transform 120ms ease-out;
 }
 
 .computer-use-player .computer-use-toolbar {
+	box-sizing: border-box;
 	flex-shrink: 0;
+	padding: var(--vscode-spacing-size20);
+	border: var(--vscode-strokeThickness) solid var(--vscode-widget-border, var(--vscode-contrastBorder, transparent));
+	border-radius: var(--vscode-cornerRadius-large);
+	background: var(--vscode-editorWidget-background);
+	box-shadow: 0 var(--vscode-spacing-size20) var(--vscode-spacing-size80) var(--vscode-widget-shadow);
+	pointer-events: auto;
+}
+
+.computer-use-player .computer-use-toolbar .monaco-action-bar .action-item .action-label.checked,
+.computer-use-player .computer-use-toolbar .monaco-action-bar .action-item .action-label.checked:hover,
+.computer-use-player .computer-use-toolbar .monaco-action-bar .action-item .action-label.checked:focus {
+	background-color: var(--vscode-toolbar-activeBackground);
+	border-radius: var(--vscode-cornerRadius-small);
+}
+
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-yellow::before,
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-pink::before,
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-blue::before {
+	content: '';
+	display: block;
+	box-sizing: border-box;
+	width: var(--vscode-spacing-size120);
+	height: var(--vscode-spacing-size120);
+	border: var(--vscode-strokeThickness) solid color-mix(in srgb, var(--vscode-foreground) 32%, transparent);
+	border-radius: var(--vscode-cornerRadius-circle);
+	background: currentColor;
+}
+
+.computer-use-player .computer-use-toolbar .action-label:is(
+	.codicon-computer-use-annotation-yellow,
+	.codicon-computer-use-annotation-pink,
+	.codicon-computer-use-annotation-blue,
+	.codicon-computer-use-annotation-width-thin,
+	.codicon-computer-use-annotation-width-medium,
+	.codicon-computer-use-annotation-width-thick
+) {
+	justify-content: center;
+}
+
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-yellow {
+	color: var(--vscode-computerUse-annotationYellow);
+}
+
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-pink {
+	color: var(--vscode-computerUse-annotationPink);
+}
+
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-blue {
+	color: var(--vscode-computerUse-annotationBlue);
+}
+
+.computer-use-player .computer-use-toolbar :is(
+	.codicon-computer-use-annotation-width-thin,
+	.codicon-computer-use-annotation-width-medium,
+	.codicon-computer-use-annotation-width-thick
+)::before {
+	content: '';
+	display: block;
+	width: var(--vscode-spacing-size120);
+	background: currentColor;
+	border-radius: var(--vscode-cornerRadius-circle);
+}
+
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-width-thin::before {
+	height: var(--vscode-spacing-size20);
+}
+
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-width-medium::before {
+	height: var(--vscode-spacing-size40);
+}
+
+.computer-use-player .computer-use-toolbar .codicon-computer-use-annotation-width-thick::before {
+	height: var(--vscode-spacing-size60);
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-toolbar .monaco-action-bar .action-item .action-label.checked {
+	outline: var(--vscode-strokeThickness) solid var(--vscode-contrastActiveBorder);
+	outline-offset: calc(-1 * var(--vscode-strokeThickness));
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-toolbar :is(
+	.codicon-computer-use-annotation-yellow,
+	.codicon-computer-use-annotation-pink,
+	.codicon-computer-use-annotation-blue
+)::before {
+	border-color: var(--vscode-contrastBorder);
 }
 
 .computer-use-player .computer-use-action-error,
@@ -135,8 +683,64 @@
 	color: var(--vscode-errorForeground);
 }
 
+.computer-use-player .computer-use-footer {
+	display: none;
+	flex-shrink: 0;
+	padding: var(--vscode-spacing-size80) var(--vscode-spacing-size160) var(--vscode-spacing-size120);
+}
+
+.computer-use-player.has-action-error .computer-use-footer {
+	display: block;
+}
+
 .computer-use-player .computer-use-action-error {
 	overflow-wrap: anywhere;
+}
+
+:is(.hc-black, .hc-light) .computer-use-player.is-live .computer-use-stage {
+	border-color: var(--vscode-contrastActiveBorder);
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-status,
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-toolbar,
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-timeline-preview {
+	border-color: var(--vscode-contrastBorder);
+	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-timeline-rail {
+	border: var(--vscode-strokeThickness) solid var(--vscode-contrastBorder);
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-timeline-inactive {
+	background: var(--vscode-contrastBorder);
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-timeline-thumb {
+	border-color: var(--vscode-contrastActiveBorder);
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-thought {
+	border-color: var(--vscode-contrastActiveBorder);
+	background: var(--vscode-editorWidget-background);
+	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-playback-feedback {
+	color: var(--vscode-foreground);
+	background: var(--vscode-editor-background);
+	border-color: var(--vscode-contrastActiveBorder);
+	opacity: 0;
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-playback-feedback.is-visible {
+	opacity: 1;
+}
+
+:is(.hc-black, .hc-light) .computer-use-player .computer-use-thought.is-streaming .computer-use-thought-label {
+	background: none;
+	color: var(--vscode-descriptionForeground);
+	animation: none;
 }
 
 .computer-use-player:fullscreen {

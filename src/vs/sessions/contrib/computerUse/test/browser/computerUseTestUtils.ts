@@ -6,7 +6,8 @@
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Disposable, IDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { IComputerUseVideoBatch, IComputerUseVideoConfig, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
+import { observableValue } from '../../../../../base/common/observable.js';
+import { IComputerUseRecordingPreview, IComputerUseRecordingTimelineRange, IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoConfig, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
 import { IComputerUseDecodedFrame, IComputerUseVideoDecoder, IComputerUseVideoDecoderFactory, IComputerUseVideoScheduler } from '../../browser/computerUseVideo.js';
 
 export class TestVideoScheduler implements IComputerUseVideoScheduler {
@@ -71,6 +72,14 @@ export function videoBatch(frames: readonly IComputerUseVideoFrame[], overrides?
 }
 
 export class TestVideoSource extends Disposable implements ISessionComputerUseVideoSource {
+	readonly kind?: 'recording';
+	readonly thought = observableValue<IComputerUseSharedThought | undefined>(this, undefined);
+	readonly recordingDurationMs?: number;
+	readonly recordingPositionMs = observableValue(this, 0);
+	readonly recordingTimeline: IComputerUseRecordingTimelineRange[] = [];
+	readonly recordingPreviewCalls: number[] = [];
+	readonly recordingPreviewResults: (IComputerUseRecordingPreview | DeferredPromise<IComputerUseRecordingPreview>)[] = [];
+	readonly seekCalls: number[] = [];
 	readonly calls: { cursor: IComputerUseVideoCursor | undefined; token: CancellationToken }[] = [];
 	readonly results: (IComputerUseVideoBatch | Error | DeferredPromise<IComputerUseVideoBatch>)[] = [];
 	stopCalls = 0;
@@ -81,7 +90,14 @@ export class TestVideoSource extends Disposable implements ISessionComputerUseVi
 	private reads = 0;
 	private lastBatch = videoBatch([]);
 
-	constructor(readonly hostLabel = 'Remote Mac') { super(); }
+	constructor(readonly hostLabel = 'Remote Mac', kind?: 'recording') {
+		super();
+		this.kind = kind;
+		this.recordingDurationMs = kind === 'recording' ? 4000 : undefined;
+		if (kind === 'recording') {
+			this.recordingTimeline.push({ startMs: 1500, durationMs: 1000 });
+		}
+	}
 
 	async read(cursor: IComputerUseVideoCursor | undefined, token: CancellationToken): Promise<IComputerUseVideoBatch> {
 		this.calls.push({ cursor, token });
@@ -107,6 +123,31 @@ export class TestVideoSource extends Disposable implements ISessionComputerUseVi
 		await this.stopGate?.p;
 	}
 
+	async readRecordingTimeline(): Promise<readonly IComputerUseRecordingTimelineRange[]> {
+		return this.recordingTimeline;
+	}
+
+	async readRecordingPreview(positionMs: number): Promise<IComputerUseRecordingPreview> {
+		this.recordingPreviewCalls.push(positionMs);
+		const result = this.recordingPreviewResults.shift();
+		return result instanceof DeferredPromise
+			? result.p
+			: result ?? { config: testVideoConfig, frames: [{ ...videoFrame(1, true), timestamp: positionMs * 1000 }] };
+	}
+
+	seek(positionMs: number): void {
+		this.seekCalls.push(positionMs);
+		this.recordingPositionMs.set(positionMs, undefined);
+	}
+
+	onFramePresented(timestampUs: number): void {
+		this.recordingPositionMs.set(timestampUs / 1000, undefined);
+	}
+
+	onPlaybackEnded(): void {
+		this.recordingPositionMs.set(this.recordingDurationMs ?? 0, undefined);
+	}
+
 	override dispose(): void {
 		this.disposeCalls++;
 		super.dispose();
@@ -117,8 +158,8 @@ export class TestDecodedFrame implements IComputerUseDecodedFrame {
 	readonly width = 32;
 	readonly height = 24;
 	closeCount = 0;
-	constructor(readonly timestamp: number) { }
-	draw(_context: CanvasRenderingContext2D): void { }
+	constructor(readonly timestamp: number, private readonly paint?: (context: CanvasRenderingContext2D) => void) { }
+	draw(context: CanvasRenderingContext2D): void { this.paint?.(context); }
 	close(): void { this.closeCount++; }
 }
 
@@ -127,6 +168,8 @@ export class TestVideoDecoder implements IComputerUseVideoDecoder {
 	private readonly pending: IComputerUseVideoFrame[] = [];
 	disposed = false;
 	peakQueueSize = 0;
+	flushCalls = 0;
+	private requiresKeyFrame = false;
 
 	constructor(
 		readonly config: IComputerUseVideoConfig,
@@ -138,6 +181,10 @@ export class TestVideoDecoder implements IComputerUseVideoDecoder {
 	get decodeQueueSize(): number { return this.factory.automatic ? 0 : this.pending.length; }
 
 	decode(frame: IComputerUseVideoFrame): void {
+		if (this.requiresKeyFrame && !frame.keyFrame) {
+			throw new Error('A key frame is required after flush');
+		}
+		this.requiresKeyFrame = false;
 		this.sequences.push(frame.sequence);
 		this.pending.push(frame);
 		this.peakQueueSize = Math.max(this.peakQueueSize, this.pending.length);
@@ -153,8 +200,20 @@ export class TestVideoDecoder implements IComputerUseVideoDecoder {
 		}
 	}
 
+	async flush(): Promise<void> {
+		this.flushCalls++;
+		this.requiresKeyFrame = true;
+		await this.factory.flushGate?.p;
+		if (this.factory.flushError) {
+			throw this.factory.flushError;
+		}
+		while (this.pending.length) {
+			this.releaseOne();
+		}
+	}
+
 	emit(timestamp: number): void {
-		const frame = new TestDecodedFrame(timestamp);
+		const frame = new TestDecodedFrame(timestamp, this.factory.paint);
 		this.factory.frames.push(frame);
 		this.factory.peakFrames = Math.max(this.factory.peakFrames, this.factory.frames.filter(frame => frame.closeCount === 0).length);
 		this.output(frame);
@@ -172,6 +231,9 @@ export class TestVideoDecoderFactory implements IComputerUseVideoDecoderFactory 
 	supportGate: DeferredPromise<boolean> | undefined;
 	automatic = true;
 	outputDelay = 0;
+	flushGate: DeferredPromise<void> | undefined;
+	flushError: Error | undefined;
+	paint: ((context: CanvasRenderingContext2D) => void) | undefined;
 	readonly decoders: TestVideoDecoder[] = [];
 	readonly frames: TestDecodedFrame[] = [];
 	readonly supportChecks: IComputerUseVideoConfig[] = [];

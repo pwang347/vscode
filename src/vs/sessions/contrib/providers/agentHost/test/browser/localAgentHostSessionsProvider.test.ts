@@ -24,7 +24,7 @@ import { AGENT_HOST_AUTOMATION_CATALOG_MIGRATED_META_KEY } from '../../../../../
 import type { IAgentSubscription } from '../../../../../../platform/agentHost/common/state/agentSubscription.js';
 import type { InitializeResult } from '../../../../../../platform/agentHost/common/state/protocol/common/commands.js';
 import type { ResolveSessionConfigResult } from '../../../../../../platform/agentHost/common/state/protocol/commands.js';
-import { ChatInteractivity as ProtocolChatInteractivity, ChatOriginKind as ProtocolChatOriginKind, CustomizationEnablementKind, CustomizationLoadStatus, CustomizationType, McpServerStatus, MessageKind, SessionLifecycle, type AgentCustomization, type AgentInfo, type AutomationState, type ChangesSummary, type Customization, type RootState, type SessionActiveClient, type SessionConfigState, type SessionState } from '../../../../../../platform/agentHost/common/state/protocol/state.js';
+import { ChatInteractivity as ProtocolChatInteractivity, ChatOriginKind as ProtocolChatOriginKind, CustomizationEnablementKind, CustomizationLoadStatus, CustomizationType, McpServerStatus, MessageKind, SessionLifecycle, ToolCallContributorKind, type AgentCustomization, type AgentInfo, type AutomationState, type ChangesSummary, type Customization, type RootState, type SessionActiveClient, type SessionConfigState, type SessionState } from '../../../../../../platform/agentHost/common/state/protocol/state.js';
 import { buildChatUri, buildDefaultChatUri, buildSubagentChatUri, ChangesetStatus, isAhpAutomationCatalogChannel, ResponsePartKind, SessionSourceControlOutcome, SessionStatus as ProtocolSessionStatus, StateComponents, ToolCallConfirmationReason, ToolCallStatus, ToolResultContentType, TurnState, withSessionCreationReference, withSessionEhcliAdoptable, withSessionGitHubState, withSessionGitState, withSessionMultiRootMetadata, withSessionSourceControlState, withSessionWorkspaceless, type ChangesetState, type ChatState, type ChatSummary } from '../../../../../../platform/agentHost/common/state/sessionState.js';
 import { SessionArtifactType, withSessionArtifacts } from '../../../../../../platform/agentHost/common/sessionArtifacts.js';
 import { ActionType, NotificationType, type ActionEnvelope, type IRootConfigChangedAction, type ChatAction, type SessionAction, type TerminalAction, type INotification, type ClientAnnotationsAction, type SessionSummaryChangedParams } from '../../../../../../platform/agentHost/common/state/sessionActions.js';
@@ -5732,6 +5732,173 @@ suite('LocalAgentHostSessionsProvider', () => {
 					params: { uri: 'computer-use://video/live' },
 				}],
 			});
+		});
+
+		test('signals the exact chat and repairs stale capability from server metadata', () => {
+			const provider = createProvider(disposables, agentHost);
+			const session = setupMultiChatSession(provider, 'video-auto-open');
+			const backendSession = AgentSession.uri('copilotcli', 'video-auto-open').toString();
+			const defaultChat = buildDefaultChatUri(backendSession);
+			const peerChat = buildChatUri(backendSession, 'peer');
+			agentHost.setSessionState('video-auto-open', 'copilotcli', {
+				...makeState([
+					makeChatSummary(defaultChat, ''),
+					makeChatSummary(peerChat, 'Peer'),
+				], { defaultChat }),
+				customizations: [
+					{
+						type: CustomizationType.McpServer,
+						id: 'computer-use-id',
+						uri: 'mcp:computer-use',
+						name: 'computer-use',
+						state: { kind: McpServerStatus.Ready },
+					},
+					{
+						type: CustomizationType.McpServer,
+						id: 'other-id',
+						uri: 'mcp:other',
+						name: 'other',
+						state: { kind: McpServerStatus.Ready },
+					},
+				],
+			});
+			const invocations: { sessionId: string; chatResource: URI }[] = [];
+			disposables.add(provider.onDidInvokeComputerUseTool(invocation => invocations.push(invocation)));
+			for (const [toolCallId, customizationId] of [['ignored', 'other-id'], ['opened', 'computer-use-id']]) {
+				agentHost.fireAction({
+					channel: peerChat,
+					action: {
+						type: ActionType.ChatToolCallReady,
+						turnId: 'turn',
+						toolCallId,
+						contributor: { kind: ToolCallContributorKind.MCP, customizationId },
+						invocationMessage: 'Inspect Window',
+					},
+					serverSeq: 1,
+					origin: undefined,
+				});
+			}
+			agentHost.setSessionState('video-auto-open', 'copilotcli', {
+				...makeState([
+					makeChatSummary(defaultChat, ''),
+					makeChatSummary(peerChat, 'Peer'),
+				], { defaultChat }),
+				customizations: [{
+					type: CustomizationType.McpServer,
+					id: 'other-id',
+					uri: 'mcp:other',
+					name: 'other',
+					state: { kind: McpServerStatus.Ready },
+				}],
+			});
+			assert.strictEqual(session.capabilities.get().supportsComputerUseVideo, undefined);
+			agentHost.fireAction({
+				channel: peerChat,
+				action: {
+					type: ActionType.ChatToolCallReady,
+					turnId: 'turn',
+					toolCallId: 'opened-from-server-name',
+					invocationMessage: 'Inspect Window',
+					_meta: { mcpServerName: 'computer-use' },
+				},
+				serverSeq: 2,
+				origin: undefined,
+			});
+			const expected = {
+				sessionId: session.sessionId,
+				chatResource: session.chats.get().find(chat => chat.resource.fragment === 'peer')!.resource,
+				turnId: 'turn',
+			};
+			assert.deepStrictEqual({
+				invocations,
+				availableAfterInvocation: session.capabilities.get().supportsComputerUseVideo,
+			}, {
+				invocations: [expected, expected],
+				availableAfterInvocation: true,
+			});
+		});
+
+		test('publishes bounded client-visible reasoning for the exact video chat', () => {
+			const provider = createProvider(disposables, agentHost);
+			const session = setupMultiChatSession(provider, 'video-reasoning');
+			const backendSession = AgentSession.uri('copilotcli', 'video-reasoning').toString();
+			const defaultChat = buildDefaultChatUri(backendSession);
+			const peerChat = buildChatUri(backendSession, 'peer');
+			agentHost.setSessionState('video-reasoning', 'copilotcli', {
+				...makeState([
+					makeChatSummary(defaultChat, ''),
+					makeChatSummary(peerChat, 'Peer'),
+				], { defaultChat }),
+				customizations: [{
+					type: CustomizationType.McpServer,
+					id: 'computer-use-id',
+					uri: 'mcp:computer-use',
+					name: 'computer-use',
+					state: { kind: McpServerStatus.Ready },
+				}],
+			});
+			const chat = session.chats.get().find(chat => chat.resource.fragment === 'peer')!;
+			const source = provider.getComputerUseVideoSource(session.sessionId, chat.resource);
+
+			agentHost.fireAction({
+				channel: peerChat,
+				action: {
+					type: ActionType.ChatTurnStarted,
+					turnId: 'turn',
+					startedAt: new Date().toISOString(),
+					message: { text: 'Use Computer Use', origin: { kind: MessageKind.User } },
+				},
+				serverSeq: 1,
+				origin: undefined,
+			});
+			agentHost.fireAction({
+				channel: peerChat,
+				action: { type: ActionType.ChatReasoning, turnId: 'turn', partId: 'reasoning', content: 'The window is open. ' },
+				serverSeq: 2,
+				origin: undefined,
+			});
+			agentHost.fireAction({
+				channel: peerChat,
+				action: { type: ActionType.ChatReasoning, turnId: 'turn', partId: 'reasoning', content: 'I will type now.' },
+				serverSeq: 3,
+				origin: undefined,
+			});
+			const streaming = source.thought?.get();
+			agentHost.fireAction({
+				channel: peerChat,
+				action: {
+					type: ActionType.ChatToolCallStart,
+					turnId: 'turn',
+					toolCallId: 'tool',
+					toolName: 'computer-use-type_text',
+					displayName: 'Type in App',
+				},
+				serverSeq: 4,
+				origin: undefined,
+			});
+			const completed = source.thought?.get();
+			agentHost.fireAction({
+				channel: peerChat,
+				action: {
+					type: ActionType.ChatTurnStarted,
+					turnId: 'next',
+					startedAt: new Date().toISOString(),
+					message: { text: 'Continue', origin: { kind: MessageKind.User } },
+				},
+				serverSeq: 5,
+				origin: undefined,
+			});
+
+			assert.deepStrictEqual({
+				streaming,
+				completed,
+				cleared: source.thought?.get(),
+			}, {
+				streaming: { source: 'reasoning', text: 'The window is open. I will type now.', streaming: true },
+				completed: { source: 'reasoning', text: 'The window is open. I will type now.', streaming: false },
+				cleared: undefined,
+			});
+			source.dispose();
 		});
 
 		test('default + peer catalog surfaces both chats with the default as mainChat', () => {

@@ -9,6 +9,7 @@ import { ArtifactToolsContribution } from './artifactTools/artifactToolsContribu
 import { ChatDraftContribution } from './chatDraft/chatDraftContribution.js';
 import { ChatSurfaceContribution } from './chatSurface/chatSurfaceContribution.js';
 import { CheckpointAndChangesetContribution } from './checkpointAndChangeset/checkpointAndChangesetContribution.js';
+import { ComputerUseRecordingContribution } from './computerUseRecording/computerUseRecordingContribution.js';
 import { GitHubReferencesContribution } from './githubReferences/githubReferencesContribution.js';
 import { LocalCommandContribution } from './localCommand/localCommandContribution.js';
 import { MarkdownPlanRichLinksContribution } from './markdownPlanRichLinks/markdownPlanRichLinksContribution.js';
@@ -40,6 +41,7 @@ export function registerBuiltInChatContributions(
 	registrations.add(contributions.registerContribution(SessionWorkspaceConversionContribution));
 	registrations.add(contributions.registerContribution(QueueDrainContribution));
 	registrations.add(contributions.registerContribution(SessionInputNeededContribution));
+	registrations.add(contributions.registerContribution(ComputerUseRecordingContribution));
 	registrations.add(contributions.registerContribution(GitHubReferencesContribution));
 	registrations.add(contributions.registerContribution(SessionTitleContribution));
 	registrations.add(contributions.registerContribution(MarkUnreadContribution));

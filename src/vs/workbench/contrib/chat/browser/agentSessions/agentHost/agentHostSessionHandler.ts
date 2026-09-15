@@ -37,6 +37,7 @@ import { AgentFeedbackAttachmentDisplayKind, AgentFeedbackAttachmentMetadataKey 
 import { BrowserViewAttachmentDisplayKind, BrowserViewAttachmentMetadataKey } from '../../../../../../platform/agentHost/common/meta/browserViewAttachments.js';
 import { readToolCallMeta } from '../../../../../../platform/agentHost/common/meta/agentToolCallMeta.js';
 import { readCompletionAttachmentMeta } from '../../../../../../platform/agentHost/common/meta/agentCompletionAttachmentMeta.js';
+import { AgentSystemNotificationKind, readAgentSystemNotificationMeta } from '../../../../../../platform/agentHost/common/meta/agentSystemNotificationMeta.js';
 import { IRemoteAgentHostService } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { SessionConfigKey } from '../../../../../../platform/agentHost/common/sessionConfigKeys.js';
 import { isWorktreeUnderRepository } from '../../../../../../platform/agentHost/common/worktreePaths.js';
@@ -2462,6 +2463,16 @@ export class AgentHostSessionHandler extends Disposable implements IChatSessionC
 			}
 			previousQueuedIds = currentQueuedIds;
 			previousTurnIds = currentTurnIds;
+
+			const systemNotificationMeta = readAgentSystemNotificationMeta(activeTurn.message);
+			if (systemNotificationMeta.kind === AgentSystemNotificationKind.ComputerUseRecording) {
+				const recording = systemNotificationToChatPart(systemNotificationMeta.recordingTitle ?? activeTurn.message.text, this._config.connectionAuthority, activeTurn.message._meta);
+				const previousResponse = this._chatService.getSession(sessionResource)?.getRequests().at(-1)?.response;
+				if (recording?.kind === 'systemNotification' && previousResponse?.isComplete) {
+					previousResponse.updateContent(recording);
+					return;
+				}
+			}
 
 			// Signal the session to create a new request+response pair
 			chatSession.startServerRequest(

@@ -1071,6 +1071,8 @@ export class CopilotAgentSession extends Disposable {
 	private readonly _sandboxConfigSequencer = new Sequencer();
 	private readonly _mcpEnablementSequencer = new Sequencer();
 	private readonly _mcpServerLifecycleSequencer = new SequencerByKey<string>();
+	// The native Computer Use video resource permits only one pending read per session.
+	private readonly _computerUseResourceReadSequencer = new Sequencer();
 	private readonly _steeringMessagesInFlight = new Set<string>();
 	/**
 	 * Steering messages that have been accepted by the SDK but not yet
@@ -3539,7 +3541,10 @@ export class CopilotAgentSession extends Disposable {
 				if (!uri) {
 					throw new Error(`resources/read missing 'uri' parameter`);
 				}
-				return apps.readResource({ serverName, uri });
+				const readResource = () => apps.readResource({ serverName, uri });
+				return serverName === COPILOT_COMPUTER_USE_SERVER_NAME
+					? this._computerUseResourceReadSequencer.queue(readResource)
+					: readResource();
 			}
 			case 'resources/list': {
 				// Not implemented in the SDK yet

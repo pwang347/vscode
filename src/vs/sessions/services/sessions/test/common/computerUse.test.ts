@@ -19,7 +19,7 @@ const liveBatch: IComputerUseVideoBatch = {
 	],
 };
 
-function resource(batch: Partial<IComputerUseVideoBatch>) {
+function resource(batch: unknown) {
 	return { contents: [{ uri: 'computer-use://video/live', mimeType: 'application/json', text: JSON.stringify(batch) }] };
 }
 
@@ -28,6 +28,21 @@ suite('Computer Use video resource', () => {
 
 	test('accepts an ordered H264 batch with microsecond timestamps', () => {
 		assert.deepStrictEqual(parseComputerUseVideoResource(resource(liveBatch)), liveBatch);
+	});
+
+	test('accepts optional normalized action focus on each encoded frame', () => {
+		const batch = { ...liveBatch, frames: [{ ...liveBatch.frames![0], focus: { x: 0.75, y: 0.25 } }, liveBatch.frames![1]] };
+		assert.deepStrictEqual(parseComputerUseVideoResource(resource(batch)), batch);
+	});
+
+	test('rejects action focus outside the captured window or with invalid coordinates', () => {
+		for (const focus of [
+			{ x: -0.01, y: 0.5 }, { x: 0.5, y: 1.01 }, { x: null, y: 0.5 },
+			{ x: '0.5', y: 0.5 }, { x: 0.5 }, { x: 0.5, y: null },
+		]) {
+			const batch = { ...liveBatch, frames: [{ ...liveBatch.frames![0], focus }] };
+			assert.throws(() => parseComputerUseVideoResource(resource(batch)));
+		}
 	});
 
 	test('accepts idle and permission states without media payloads', () => {
