@@ -120,7 +120,7 @@ export class ComputerUseRecordingSource extends Disposable implements ISessionCo
 		}
 		this.replayThoughtsThrough(playbackPositionUs / 1000);
 
-		for (;;) {
+		for (; ;) {
 			const segment = await this.getSegment(token);
 			if (!segment) {
 				this.ended = true;

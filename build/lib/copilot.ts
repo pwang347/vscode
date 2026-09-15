@@ -117,7 +117,7 @@ const copilotOptionalNativePayloadDirs = [
 
 function getCopilotOptionalNativePayloadFiles(platform: string, includeComputerUse: boolean): string[] {
 	const files = [
-		...(!includeComputerUse || platform !== 'darwin' ? ['plugins/computer-use/**'] : []),
+		...(!includeComputerUse || (platform !== 'darwin' && platform !== 'win32') ? ['plugins/computer-use/**'] : []),
 		'prebuilds/*/computer.node',
 		'prebuilds/*/keytar.node',
 		// macOS voice media-pause helper (MediaRemote adapter). Optional and

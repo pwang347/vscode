@@ -151,7 +151,7 @@ export class ComputerUseTurnRecorder extends Disposable {
 					await this._acceptBatch(parseComputerUseVideoResource(outcome.value));
 					break;
 				case 'error':
-				this._addGap('readError');
+					this._addGap('readError');
 					break;
 				case 'timeout':
 					this._addGap('readError');

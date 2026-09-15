@@ -44,48 +44,73 @@ suite('Copilot Computer Use', () => {
 		};
 	}
 
-	async function createPlugin(path: string, appName = 'Copilot Computer Use.app'): Promise<void> {
+	async function createPlugin(path: string, platform: 'darwin' | 'win32' = 'darwin', appName = 'Copilot Computer Use.app'): Promise<void> {
 		const files = new Map([
 			[join(path, '.plugin', 'plugin.json'), JSON.stringify({ name: 'computer-use' })],
 			[join(path, '.mcp.json'), '{}'],
-			[join(path, 'computer-use-mcp'), 'mcp'],
-			[join(path, appName, 'Contents', 'Info.plist'), 'plist'],
-			[join(path, appName, 'Contents', 'MacOS', 'computer-use'), 'native'],
 		]);
+		if (platform === 'win32') {
+			files.set(join(path, 'computer-use-mcp.exe'), 'mcp');
+			files.set(join(path, 'CopilotComputerUse.exe'), 'native');
+		} else {
+			files.set(join(path, 'computer-use-mcp'), 'mcp');
+			files.set(join(path, appName, 'Contents', 'Info.plist'), 'plist');
+			files.set(join(path, appName, 'Contents', 'MacOS', 'computer-use'), 'native');
+		}
 		for (const [file, content] of files) {
 			await fs.mkdir(dirname(file), { recursive: true });
 			await fs.writeFile(file, content);
 		}
 	}
 
-	test('resolves the bundled macOS plugin without launching a process', async () => {
-		const plugin = join(root, 'plugins', 'computer-use');
-		await createPlugin(plugin);
+	for (const platform of ['darwin', 'win32'] as const) {
+		test(`resolves the bundled ${platform} plugin without launching a process`, async () => {
+			const plugin = join(root, 'plugins', 'computer-use');
+			await createPlugin(plugin, platform);
 
-		assert.deepStrictEqual({
-			path: await resolveCopilotComputerUsePlugin(options(), logService),
-			warnings: logService.warnings,
-		}, { path: plugin, warnings: [] });
-	});
+			assert.deepStrictEqual({
+				path: await resolveCopilotComputerUsePlugin(options({ platform }), logService),
+				warnings: logService.warnings,
+			}, { path: plugin, warnings: [] });
+		});
 
-	test('uses a source-built helper only in development builds', async () => {
-		const bundled = join(root, 'plugins', 'computer-use');
-		const development = join(root, 'development');
-		await createPlugin(bundled);
-		await createPlugin(development, 'Copilot Computer Use Dev.app');
+		test(`uses a source-built ${platform} helper only in development builds`, async () => {
+			const bundled = join(root, 'plugins', 'computer-use');
+			const development = join(root, 'development plugin');
+			await createPlugin(bundled, platform);
+			await createPlugin(development, platform, 'Copilot Computer Use Dev.app');
 
-		assert.deepStrictEqual({
-			development: await resolveCopilotComputerUsePlugin(options({ developmentPluginPath: development }), logService),
-			packaged: await resolveCopilotComputerUsePlugin(options({ developmentPluginPath: development, isBuilt: true }), logService),
-		}, { development, packaged: bundled });
-	});
+			assert.deepStrictEqual({
+				development: await resolveCopilotComputerUsePlugin(options({ platform, developmentPluginPath: development }), logService),
+				packaged: await resolveCopilotComputerUsePlugin(options({ platform, developmentPluginPath: development, isBuilt: true }), logService),
+			}, { development, packaged: bundled });
+		});
 
-	test('does not expose the local desktop to standalone, remote, or non-macOS hosts', async () => {
+		test(`exposes the ${platform} bundle on a standalone host only after host-side opt-in`, async () => {
+			const plugin = join(root, 'plugins', 'computer-use');
+			await createPlugin(plugin, platform);
+
+			assert.deepStrictEqual({
+				disabled: await resolveCopilotComputerUsePlugin(options({ platform, hostLaunchKind: AgentHostLaunchKind.Unknown }), logService),
+				enabled: await resolveCopilotComputerUsePlugin(options({ platform, hostLaunchKind: AgentHostLaunchKind.Unknown, remoteEnabled: true }), logService),
+				cliDisabled: await resolveCopilotComputerUsePlugin(options({ platform, hostLaunchKind: AgentHostLaunchKind.VSCodeCLI }), logService),
+				cliEnabled: await resolveCopilotComputerUsePlugin(options({ platform, hostLaunchKind: AgentHostLaunchKind.VSCodeCLI, remoteEnabled: true }), logService),
+			}, { disabled: undefined, enabled: plugin, cliDisabled: undefined, cliEnabled: plugin });
+		});
+
+		test(`does not fall back from an invalid ${platform} development override`, async () => {
+			await createPlugin(join(root, 'plugins', 'computer-use'), platform);
+
+			await assert.rejects(resolveCopilotComputerUsePlugin(options({ platform, developmentPluginPath: join(root, 'missing') }), logService), /ENOENT/);
+		});
+	}
+
+	test('does not expose the desktop on unsupported hosts, even after opt-in', async () => {
 		const excluded = [
 			options({ hostLaunchKind: AgentHostLaunchKind.VSCodeCLI }),
 			options({ hostLaunchKind: AgentHostLaunchKind.Unknown }),
 			options({ platform: 'linux' }),
-			options({ platform: 'win32' }),
+			options({ platform: 'linux', remoteEnabled: true }),
 		];
 
 		assert.deepStrictEqual({
@@ -103,26 +128,28 @@ suite('Copilot Computer Use', () => {
 		}, { path: undefined, reported: [true] });
 	});
 
-	test('exposes the native bundle on a macOS remote host only after host-side opt-in', async () => {
-		const plugin = join(root, 'plugins', 'computer-use');
-		await createPlugin(plugin);
-
-		assert.deepStrictEqual({
-			disabled: await resolveCopilotComputerUsePlugin(options({ hostLaunchKind: AgentHostLaunchKind.Unknown }), logService),
-			enabled: await resolveCopilotComputerUsePlugin(options({ hostLaunchKind: AgentHostLaunchKind.Unknown, remoteEnabled: true }), logService),
-			unsupported: await resolveCopilotComputerUsePlugin(options({ platform: 'linux', remoteEnabled: true }), logService),
-		}, { disabled: undefined, enabled: plugin, unsupported: undefined });
-	});
-
 	test('rejects a relative development override', async () => {
 		await assert.rejects(resolveCopilotComputerUsePlugin(options({ developmentPluginPath: '../computer-use' }), logService), /must be an absolute path/);
 	});
 
-	test('does not silently fall back when a development override is missing', async () => {
-		await createPlugin(join(root, 'plugins', 'computer-use'));
+	for (const file of ['computer-use-mcp.exe', 'CopilotComputerUse.exe']) {
+		test(`rejects a Windows bundle missing ${file}`, async () => {
+			const plugin = join(root, 'plugins', 'computer-use');
+			await createPlugin(plugin, 'win32');
+			await fs.unlink(join(plugin, file));
 
-		await assert.rejects(resolveCopilotComputerUsePlugin(options({ developmentPluginPath: join(root, 'missing') }), logService), /ENOENT/);
-	});
+			await assert.rejects(resolveCopilotComputerUsePlugin(options({ platform: 'win32' }), logService), /ENOENT/);
+		});
+
+		test(`rejects a directory in place of Windows executable ${file}`, async () => {
+			const plugin = join(root, 'plugins', 'computer-use');
+			await createPlugin(plugin, 'win32');
+			await fs.unlink(join(plugin, file));
+			await fs.mkdir(join(plugin, file));
+
+			await assert.rejects(resolveCopilotComputerUsePlugin(options({ platform: 'win32' }), logService), /requires a file/);
+		});
+	}
 
 	test('rejects a bundle with a missing native executable', async () => {
 		const plugin = join(root, 'plugins', 'computer-use');

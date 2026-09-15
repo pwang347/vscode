@@ -8,7 +8,7 @@ import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { CopilotClient, RuntimeConnection, ToolSet, type CopilotSession, type SessionConfig } from '@github/copilot-sdk';
 import { join } from '../../../../../base/common/path.js';
-import { isMacintosh } from '../../../../../base/common/platform.js';
+import { isMacintosh, isWindows } from '../../../../../base/common/platform.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { NullLogService } from '../../../../log/common/log.js';
@@ -18,12 +18,12 @@ import { createCopilotCliEnvironment } from '../../../node/copilot/copilotCliEnv
 import { COPILOT_COMPUTER_USE_PLUGIN_PATH_ENV_VAR, COPILOT_COMPUTER_USE_SERVER_NAME, resolveCopilotComputerUsePlugin } from '../../../node/copilot/copilotComputerUse.js';
 import { createIsolatedProviderEnvironment } from '../providerTestEnvironment.js';
 
-(isMacintosh ? suite : suite.skip)('Agent Host Provider Integration - Copilot Computer Use', function () {
+(isMacintosh || isWindows ? suite : suite.skip)('Agent Host Provider Integration - Copilot Computer Use', function () {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('registers the native bundle and lists its tools without desktop access or model requests', async function () {
 		this.timeout(60_000);
-		const cliPath = URI.joinPath(getAppNodeModulesUri(), '@github', `copilot-darwin-${process.arch}`, 'index.js').fsPath;
+		const cliPath = URI.joinPath(getAppNodeModulesUri(), '@github', `copilot-${process.platform}-${process.arch}`, 'index.js').fsPath;
 		const pluginPath = await resolveCopilotComputerUsePlugin({
 			cliPath,
 			platform: process.platform,

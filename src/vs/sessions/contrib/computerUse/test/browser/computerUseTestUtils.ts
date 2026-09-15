@@ -29,7 +29,7 @@ export class TestVideoScheduler implements IComputerUseVideoScheduler {
 	async advance(milliseconds: number): Promise<void> {
 		await this.flushMicrotasks();
 		const end = this.time + milliseconds;
-		for (;;) {
+		for (; ;) {
 			const next = [...this.callbacks].sort((first, second) => first.time - second.time)[0];
 			if (!next || next.time > end) {
 				break;

@@ -8,6 +8,7 @@ import * as fs from 'fs/promises';
 import { tmpdir } from 'os';
 import { timeout } from '../../../../base/common/async.js';
 import { join } from '../../../../base/common/path.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { ServiceCollection } from '../../../instantiation/common/serviceCollection.js';
@@ -276,6 +277,7 @@ suite('Computer Use Recording Contribution', () => {
 		const recordingUri = URI.parse(meta.recordingUri ?? '');
 		const manifest = parseComputerUseRecordingManifestJson(await fs.readFile(recordingUri.fsPath, 'utf8'));
 		const sessionDataDirectory = harness.dataService.getSessionDataDir(URI.parse(session));
+		const recordingsDirectory = URI.joinPath(sessionDataDirectory, 'computer-use-recordings');
 		assert.deepStrictEqual({
 			requests: harness.requests,
 			localTurn: {
@@ -288,7 +290,7 @@ suite('Computer Use Recording Contribution', () => {
 				meta: {
 					kind: meta.kind,
 					title: meta.recordingTitle,
-					recordingInsideSession: recordingUri.scheme === 'file' && recordingUri.path.startsWith(`${sessionDataDirectory.path}/computer-use-recordings/`),
+					recordingInsideSession: extUriBiasedIgnorePathCase.isEqualOrParent(recordingUri, recordingsDirectory),
 					durationMs: meta.durationMs,
 					sizeBytesPositive: (meta.sizeBytes ?? 0) > 0,
 					trimmed: meta.trimmed,
@@ -336,7 +338,7 @@ suite('Computer Use Recording Contribution', () => {
 		for (const [index, reason] of [
 			{ kind: 'cancelled' } as const,
 			{ kind: 'error', error: { errorType: 'internalError', message: 'failed' }, resumable: false } as const,
-	].entries()) {
+		].entries()) {
 			const { session, chat } = createSession(harness.stateManager, `empty-${index}`);
 			const turnId = `turn-${index}`;
 			startTurn(harness.stateManager, chat, turnId);

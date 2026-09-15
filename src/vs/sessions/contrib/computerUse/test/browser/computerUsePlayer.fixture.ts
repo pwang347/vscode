@@ -333,7 +333,7 @@ async function renderPlayer({ container, disposableStore, theme }: ComponentFixt
 			message: state === 'error' ? 'Waiting for screen capture permission on Build Mac.'
 				: state === 'completed' ? 'Finished verifying the order confirmation.'
 					: state === 'stopped' ? 'The agent was stopped after verifying the order confirmation.'
-					: 'Checking the checkout form, then selecting Continue to verify the order confirmation.',
+						: 'Checking the checkout form, then selecting Continue to verify the order confirmation.',
 			active: state !== 'error' && state !== 'completed' && state !== 'stopped',
 		}),
 	));
@@ -369,10 +369,10 @@ async function renderPlayer({ container, disposableStore, theme }: ComponentFixt
 		const ready = await raceTimeout(waitForState(player.video.state, current => {
 			return state === 'loading' ? current.message.startsWith('Connecting')
 				: state === 'buffering' ? current.phase === 'buffering'
-				: state === 'synchronizing' ? current.phase === 'buffering' && current.message.startsWith('Synchronizing')
-				: state === 'reconnecting' ? current.phase === 'reconnecting'
-				: state === 'completed' ? current.retainedFrame === true
-				: current.status === 'live' || current.status === 'error' || current.status === 'permissionRequired' || current.status === 'unsupported';
+					: state === 'synchronizing' ? current.phase === 'buffering' && current.message.startsWith('Synchronizing')
+						: state === 'reconnecting' ? current.phase === 'reconnecting'
+							: state === 'completed' ? current.retainedFrame === true
+								: current.status === 'live' || current.status === 'error' || current.status === 'permissionRequired' || current.status === 'unsupported';
 		}, undefined, cancellation.token), 2000);
 		if (!ready) {
 			throw new Error('The Computer Use fixture did not produce a decoded frame.');
