@@ -7,12 +7,13 @@ import { raceCancellationError } from '../../../../../base/common/async.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { CancellationError, getErrorMessage } from '../../../../../base/common/errors.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { constObservable, IObservable } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { vBoolean, vObj, vOptionalProp } from '../../../../../base/common/validation.js';
 import { localize } from '../../../../../nls.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { buildMcpChannel } from '../../../../../platform/agentHost/common/mcpChannel.js';
-import { IComputerUseVideoBatch, IComputerUseVideoCursor, ISessionComputerUseVideoSource, parseComputerUseVideoResource } from '../../../../services/sessions/common/computerUse.js';
+import { IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoCursor, ISessionComputerUseVideoSource, parseComputerUseVideoResource } from '../../../../services/sessions/common/computerUse.js';
 
 const COMPUTER_USE_SERVER = 'computer-use';
 const VIDEO_RESOURCE = 'computer-use://video/live';
@@ -22,6 +23,7 @@ interface IAgentHostComputerUseVideoOptions {
 	readonly hostLabel: string;
 	readonly chat: URI;
 	readonly connection: IAgentConnection;
+	readonly thought?: IObservable<IComputerUseSharedThought | undefined>;
 	readonly getConnection: () => IAgentConnection | undefined;
 	readonly isEnabled?: () => boolean;
 	readonly cancelChat: () => Promise<void>;
@@ -29,11 +31,13 @@ interface IAgentHostComputerUseVideoOptions {
 
 export class AgentHostComputerUseVideoSource extends Disposable implements ISessionComputerUseVideoSource {
 	readonly hostLabel: string;
+	readonly thought: IObservable<IComputerUseSharedThought | undefined>;
 	private readonly _channel: string;
 
 	constructor(private readonly _options: IAgentHostComputerUseVideoOptions) {
 		super();
 		this.hostLabel = _options.hostLabel;
+		this.thought = _options.thought ?? constObservable(undefined);
 		this._channel = buildMcpChannel(_options.chat, COMPUTER_USE_SERVER);
 	}
 

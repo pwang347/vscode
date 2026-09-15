@@ -64,6 +64,7 @@ export function createComputerUseVideoDecoder(element: HTMLElement): IComputerUs
 					duration: frame.duration,
 					data: decodeBase64(frame.data).buffer,
 				})),
+				flush: () => decoder.flush(),
 				dispose: () => {
 					if (decoder.state !== 'closed') {
 						decoder.close();

@@ -2564,6 +2564,7 @@ export class ChatListItemRenderer extends Disposable implements ITreeRenderer<Ch
 			ChatSystemNotificationContentPart,
 			{ kind: 'systemNotification', content: new MarkdownString(label) },
 			this.chatContentMarkdownRenderer,
+			undefined,
 		);
 		templateData.elementDisposables.add(notificationPart);
 		templateData.value.appendChild(notificationPart.domNode);
@@ -3582,7 +3583,7 @@ export class ChatListItemRenderer extends Disposable implements ITreeRenderer<Ch
 				return this.instantiationService.createInstance(ChatProgressContentPart, content, this.chatContentMarkdownRenderer, context, undefined, undefined, undefined, undefined, content.shimmer);
 			} else if (content.kind === 'systemNotification') {
 				this.finalizeCurrentThinkingPart(context, templateData);
-				return this.instantiationService.createInstance(ChatSystemNotificationContentPart, content, this.chatContentMarkdownRenderer);
+				return this.instantiationService.createInstance(ChatSystemNotificationContentPart, content, this.chatContentMarkdownRenderer, context);
 			} else if (content.kind === 'working') {
 				return this.instantiationService.createInstance(ChatWorkingProgressContentPart, content, this.chatContentMarkdownRenderer, context);
 			} else if (content.kind === 'progressTask' || content.kind === 'progressTaskSerialized') {

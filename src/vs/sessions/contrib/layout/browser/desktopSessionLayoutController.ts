@@ -15,6 +15,7 @@ import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { Parts } from '../../../../workbench/services/layout/browser/layoutService.js';
 import { ISession, sessionHasChanges } from '../../../services/sessions/common/session.js';
 import { CHANGES_VIEW_CONTAINER_ID, CHANGES_VIEW_ID } from '../../changes/common/changes.js';
+import { COMPUTER_USE_EDITOR_INPUT_ID } from '../../computerUse/common/computerUse.js';
 import { SESSIONS_FILES_CONTAINER_ID } from '../../files/browser/files.contribution.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
 
@@ -68,6 +69,7 @@ export class LayoutController extends BaseLayoutController {
 
 	/** [D2/D8] `true` while the controller hides the side pane to restore a session's remembered state, so the hide isn't captured as a user choice. */
 	private _hidingAuxiliaryBarForRestore = false;
+	private _computerUseAuxiliaryBarState: { readonly sessionResource: URI; readonly visible: boolean; readonly activeViewContainerId?: string } | undefined;
 
 	protected override _registerViewStateManagement(): void {
 		this._loadNewSessionViewState();
@@ -141,10 +143,27 @@ export class LayoutController extends BaseLayoutController {
 			);
 		}));
 
+		const activeEditorObs = observableFromEvent(this, this._editorService.onDidActiveEditorChange, () => this._editorService.activeEditor ?? undefined);
+		this._register(autorun(reader => {
+			editorMaximizedObs.read(reader);
+			const sessionResource = this.activeSessionResourceObs.read(reader);
+			const activeEditor = activeEditorObs.read(reader);
+			const shouldHide = !this._layoutService.isSinglePaneLayoutEnabled
+				&& !this.multipleSessionsVisibleObs.read(reader)
+				&& activeEditor?.typeId === COMPUTER_USE_EDITOR_INPUT_ID;
+			this._syncComputerUseAuxiliaryBar(sessionResource, shouldHide);
+		}));
+
 		// [D2] Track auxiliary bar visibility changes by the user so that hiding the
 		// Side Panel for a session is remembered immediately (not only on switch).
 		this._register(this._layoutService.onDidChangePartVisibility(e => {
 			if (e.partId !== Parts.AUXILIARYBAR_PART) {
+				return;
+			}
+			if (this._computerUseAuxiliaryBarState) {
+				if (e.visible) {
+					this._hideAuxiliaryBarForRestore();
+				}
 				return;
 			}
 			// [D9] Toggling the whole side pane (editor + aux bar together) hides or
@@ -210,6 +229,37 @@ export class LayoutController extends BaseLayoutController {
 				this._revealChangesViewOnFirstOpen();
 			}
 		}));
+	}
+
+	private _syncComputerUseAuxiliaryBar(sessionResource: URI | undefined, shouldHide: boolean): void {
+		const previous = this._computerUseAuxiliaryBarState;
+		if (shouldHide && sessionResource) {
+			if (previous && isEqual(previous.sessionResource, sessionResource)) {
+				if (this._layoutService.isVisible(Parts.AUXILIARYBAR_PART)) {
+					this._hideAuxiliaryBarForRestore();
+				}
+				return;
+			}
+			this._computerUseAuxiliaryBarState = {
+				sessionResource,
+				visible: this._layoutService.isVisible(Parts.AUXILIARYBAR_PART),
+				activeViewContainerId: this._paneCompositePartService.getActivePaneComposite(ViewContainerLocation.AuxiliaryBar)?.getId(),
+			};
+			this._hideAuxiliaryBarForRestore();
+			return;
+		}
+		if (!previous) {
+			return;
+		}
+		this._computerUseAuxiliaryBarState = undefined;
+		if (!sessionResource || !isEqual(previous.sessionResource, sessionResource) || !previous.visible) {
+			return;
+		}
+		if (previous.activeViewContainerId && this._isAuxiliaryBarContainerPinned(previous.activeViewContainerId)) {
+			void this._viewsService.openViewContainer(previous.activeViewContainerId, false);
+		} else {
+			void this._openDefaultAuxiliaryBarContainer();
+		}
 	}
 
 	protected _registerNewSessionRules(): void { }

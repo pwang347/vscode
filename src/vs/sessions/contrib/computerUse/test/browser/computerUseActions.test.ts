@@ -5,12 +5,20 @@
 
 import assert from 'assert';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { MarkdownString } from '../../../../../base/common/htmlContent.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { constObservable, observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { upcastPartial } from '../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { isIMenuItem, MenuRegistry } from '../../../../../platform/actions/common/actions.js';
+import { serializeComputerUseRecordingSegment } from '../../../../../platform/agentHost/common/computerUseRecording.js';
+import { FileService } from '../../../../../platform/files/common/fileService.js';
+import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { TestInstantiationService } from '../../../../../platform/instantiation/test/common/instantiationServiceMock.js';
+import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { IUntypedEditorInput } from '../../../../../workbench/common/editor.js';
 import { EditorInput } from '../../../../../workbench/common/editor/editorInput.js';
 import { IChatEntitlementService } from '../../../../../workbench/services/chat/common/chatEntitlementService.js';
@@ -18,11 +26,12 @@ import { IEditorService } from '../../../../../workbench/services/editor/common/
 import { Menus } from '../../../../browser/menus.js';
 import { ISessionContext } from '../../../../services/sessions/browser/sessionContext.js';
 import { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
-import { IChat, ISessionCapabilities } from '../../../../services/sessions/common/session.js';
+import { ChatInteractivity, IChat, ISessionCapabilities, SessionRemoteConnectionStatus, SessionStatus } from '../../../../services/sessions/common/session.js';
 import { IActiveSession } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
-import { ViewComputerUseAction } from '../../browser/computerUseActions.js';
+import { openComputerUseRecording, ViewComputerUseAction } from '../../browser/computerUseActions.js';
 import { ComputerUseEditorInput } from '../../browser/computerUseEditorInput.js';
+import { ComputerUseRecordingSource } from '../../browser/computerUseRecordingSource.js';
 import { TestVideoSource } from './computerUseTestUtils.js';
 
 suite('ViewComputerUseAction', () => {
@@ -32,6 +41,9 @@ suite('ViewComputerUseAction', () => {
 		const chat = (id: string): IChat => upcastPartial<IChat>({
 			resource: URI.from({ scheme: 'test-chat', authority: providerId, path: `/${id}` }),
 			title: constObservable(id),
+			status: constObservable(SessionStatus.InProgress),
+			description: constObservable(new MarkdownString().appendText(`Working in ${id}`)),
+			interactivity: constObservable(ChatInteractivity.Full),
 		});
 		const activeChat = observableValue('activeChat', chat('chat-1'));
 		const session = upcastPartial<IActiveSession>({
@@ -113,6 +125,45 @@ suite('ViewComputerUseAction', () => {
 		}, { provider: 'host-a', chat: captured, captured, stops: [1], reads: [0] });
 	});
 
+	test('activity follows the captured chat rather than a different active host or chat', async () => {
+		const context = setup();
+		const description = observableValue('capturedDescription', new MarkdownString().appendText('Reviewing the form'));
+		context.first.activeChat.set({ ...context.first.activeChat.get(), description }, undefined);
+		await context.run(context.first.session);
+		const initial = context.inputs[0].activity.get().message;
+		context.first.activeChat.set(context.first.chat('chat-2'), undefined);
+		context.scoped.set(context.second.session, undefined);
+		description.set(new MarkdownString('Clicking **Continue**'), undefined);
+		assert.deepStrictEqual({
+			initial,
+			current: context.inputs[0].activity.get().message,
+		}, { initial: 'Reviewing the form', current: 'Clicking Continue' });
+	});
+
+	test('activity respects completion, hidden chats and disconnected hosts', async () => {
+		const context = setup();
+		const status = observableValue('status', SessionStatus.InProgress);
+		const description = observableValue('description', new MarkdownString(' '));
+		const interactivity = observableValue('interactivity', ChatInteractivity.Full);
+		const connection = observableValue<SessionRemoteConnectionStatus>('connection', { kind: 'connected' });
+		context.first.activeChat.set({ ...context.first.activeChat.get(), status, description, interactivity }, undefined);
+		await context.run({ ...context.first.session, remoteConnectionStatus: connection });
+		const activity = context.inputs[0].activity;
+		const values = [activity.get()];
+		status.set(SessionStatus.Completed, undefined);
+		values.push(activity.get());
+		interactivity.set(ChatInteractivity.Hidden, undefined);
+		values.push(activity.get());
+		connection.set({ kind: 'reconnecting' }, undefined);
+		values.push(activity.get());
+		assert.deepStrictEqual(values, [
+			{ message: 'Working...', active: true },
+			{ message: 'The agent finished this turn.', active: false },
+			{ message: 'Activity is unavailable for this chat.', active: false },
+			{ message: 'Agent host disconnected. Activity is not live.', active: false },
+		]);
+	});
+
 	test('keeps different remote hosts and chats independent and reuses only exact matches', async () => {
 		const context = setup();
 		await context.run(context.first.session);
@@ -136,17 +187,121 @@ suite('ViewComputerUseAction', () => {
 		assert.deepStrictEqual({ calls: context.calls.length, inputs: context.inputs.length }, { calls: 0, inputs: 0 });
 	});
 
-	test('gates both session header menus on AI enablement and source capability', () => {
-		const items = [Menus.SessionBarToolbar, Menus.SessionHeaderContext]
-			.map(menu => MenuRegistry.getMenuItems(menu).filter(isIMenuItem).find(item => item.command.id === 'sessions.viewComputerUse'));
-		assert.deepStrictEqual(items.map(item => ({
-			title: item?.command.title,
-			capabilityGate: item?.when?.keys().includes('sessionSupportsComputerUseVideo'),
-			aiGate: item?.when?.keys().some(key => key === 'chatIsEnabled'),
-		})), Array.from({ length: 2 }, () => ({
-			title: { value: 'View Computer Use', original: 'View Computer Use' },
-			capabilityGate: true,
-			aiGate: true,
+	test('keeps View Computer Use out of the chat toolbar and gates its context-menu entry', () => {
+		const toolbarItem = MenuRegistry.getMenuItems(Menus.SessionBarToolbar).filter(isIMenuItem)
+			.find(item => item.command.id === 'sessions.viewComputerUse');
+		const contextItem = MenuRegistry.getMenuItems(Menus.SessionHeaderContext).filter(isIMenuItem)
+			.find(item => item.command.id === 'sessions.viewComputerUse');
+		assert.deepStrictEqual({
+			toolbarItem,
+			contextItem: {
+				title: contextItem?.command.title,
+				capabilityGate: contextItem?.when?.keys().includes('sessionSupportsComputerUseVideo'),
+				aiGate: contextItem?.when?.keys().some(key => key === 'chatIsEnabled'),
+			},
+		}, {
+			toolbarItem: undefined,
+			contextItem: {
+				title: { value: 'View Computer Use', original: 'View Computer Use' },
+				capabilityGate: true,
+				aiGate: true,
+			},
+		});
+	});
+
+	test('registers annotation controls in the scoped player toolbar', () => {
+		const ids = new Set([
+			'sessions.computerUse.annotateFrame',
+			'sessions.computerUse.annotationYellow',
+			'sessions.computerUse.annotationPink',
+			'sessions.computerUse.annotationBlue',
+			'sessions.computerUse.annotationThin',
+			'sessions.computerUse.annotationMedium',
+			'sessions.computerUse.annotationThick',
+			'sessions.computerUse.resetAnnotations',
+			'sessions.computerUse.attachAnnotation',
+			'sessions.computerUse.returnFromAnnotation',
+		]);
+		const controls = MenuRegistry.getMenuItems(Menus.ComputerUsePlayer).filter(isIMenuItem)
+			.filter(item => ids.has(item.command.id))
+			.map(item => item.command.id)
+			.sort();
+
+		assert.deepStrictEqual(controls, [...ids].sort());
+	});
+
+	test('opens a validated recording and reuses its exact editor', async () => {
+		const fileService = store.add(new FileService(new NullLogService()));
+		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
+		const root = URI.from({ scheme: Schemas.inMemory, path: '/recording' });
+		await fileService.createFolder(root);
+		const segment = serializeComputerUseRecordingSegment({
+			streamId: 'stream',
+			target: { app: 'Code', windowId: 7, title: 'Editor' },
+			config: {
+				codec: 'avc1.64001f',
+				codedWidth: 1280,
+				codedHeight: 720,
+				description: Uint8Array.of(1, 2, 3, 4),
+			},
+			samples: [{
+				sequence: 1,
+				timestampUs: 0,
+				durationUs: 33_333,
+				keyFrame: true,
+				frameCount: 1,
+				data: Uint8Array.of(10),
+			}],
+		});
+		await fileService.writeFile(URI.joinPath(root, 'segment-000001.gop'), VSBuffer.wrap(segment));
+		const manifest = URI.joinPath(root, 'manifest.json');
+		await fileService.writeFile(manifest, VSBuffer.fromString(JSON.stringify({
+			version: 1,
+			recordingId: 'recording-1',
+			createdAt: '2026-09-14T20:00:00.000Z',
+			finalized: true,
+			durationMs: 34,
+			sizeBytes: segment.byteLength,
+			trimmed: false,
+			segments: [{ file: 'segment-000001.gop', startTimeMs: 0, durationMs: 34, sizeBytes: segment.byteLength, sampleCount: 1 }],
+			gaps: [],
 		})));
+		const inputs: ComputerUseEditorInput[] = [];
+		let openCalls = 0;
+		const editorService = upcastPartial<IEditorService>({
+			editors: inputs,
+			openEditor: async (input: EditorInput | IUntypedEditorInput) => {
+				assert.ok(input instanceof ComputerUseEditorInput);
+				openCalls++;
+				if (!inputs.includes(input)) {
+					inputs.push(store.add(input));
+				}
+				return undefined;
+			},
+		});
+
+		const attachmentChatResource = URI.parse('test-chat://host-a/chat-a');
+		await openComputerUseRecording(manifest, editorService, fileService, 'Entered text in TextEdit', undefined, attachmentChatResource);
+		const source = inputs[0].source as ComputerUseRecordingSource;
+		const firstBatch = await source.read(undefined, CancellationToken.None);
+		await source.read({ streamId: firstBatch.streamId!, after: firstBatch.frames!.at(-1)!.sequence }, CancellationToken.None);
+		await openComputerUseRecording(manifest, editorService, fileService, 'Entered text in TextEdit');
+		const replayed = await source.read(undefined, CancellationToken.None);
+
+		assert.deepStrictEqual({
+			inputs: inputs.length,
+			openCalls,
+			kind: inputs[0].source.kind,
+			name: inputs[0].getName(),
+			attachmentChatResource: inputs[0].attachmentChatResource?.toString(),
+			replayed: replayed.frames?.map(frame => frame.sequence),
+		}, {
+			inputs: 1,
+			openCalls: 2,
+			kind: 'recording',
+			name: 'Computer Use Recording: Entered text in TextEdit',
+			attachmentChatResource: 'test-chat://host-a/chat-a',
+			replayed: [1],
+		});
 	});
 });

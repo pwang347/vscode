@@ -9,14 +9,19 @@ import { IRenderedMarkdown, renderAsPlaintext, renderMarkdown } from '../../../.
 import { IDelayedHoverOptions, IHoverLifecycleOptions } from '../../../../../../../base/browser/ui/hover/hover.js';
 import { mainWindow } from '../../../../../../../base/browser/window.js';
 import { Codicon } from '../../../../../../../base/common/codicons.js';
+import { Event } from '../../../../../../../base/common/event.js';
 import { appendEscapedMarkdownInlineCode, IMarkdownString, MarkdownString } from '../../../../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, IDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { mock } from '../../../../../../../base/test/common/mock.js';
+import { URI } from '../../../../../../../base/common/uri.js';
+import { mock, upcastPartial } from '../../../../../../../base/test/common/mock.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../../base/test/common/utils.js';
+import { ICommandService } from '../../../../../../../platform/commands/common/commands.js';
 import { IHoverService } from '../../../../../../../platform/hover/browser/hover.js';
 import { IMarkdownRenderer } from '../../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { workbenchInstantiationService } from '../../../../../../test/browser/workbenchTestServices.js';
+import { IChatResponseViewModel } from '../../../../common/model/chatViewModel.js';
 import { ChatCollapsibleContentPart } from '../../../../browser/widget/chatContentParts/chatCollapsibleContentPart.js';
+import { IChatContentPartRenderContext } from '../../../../browser/widget/chatContentParts/chatContentParts.js';
 import { ChatSystemNotificationContentPart } from '../../../../browser/widget/chatContentParts/chatSystemNotificationContentPart.js';
 
 suite('ChatSystemNotificationContentPart', () => {
@@ -51,11 +56,13 @@ suite('ChatSystemNotificationContentPart', () => {
 			ChatSystemNotificationContentPart,
 			{ kind: 'systemNotification', content: new MarkdownString('Background command completed') },
 			renderer,
+			undefined,
 		));
 		const inlineTimingPart = disposables.add(instantiationService.createInstance(
 			ChatSystemNotificationContentPart,
 			{ kind: 'systemNotification', content: new MarkdownString('Agent Merge started'), icon: Codicon.gitMerge, renderInlineTiming: true },
 			renderer,
+			undefined,
 		));
 
 		assert.deepStrictEqual({
@@ -85,6 +92,79 @@ suite('ChatSystemNotificationContentPart', () => {
 		});
 	});
 
+	test('renders a Computer Use recording as an accessible video preview', async () => {
+		const disposables = store.add(new DisposableStore());
+		const instantiationService = workbenchInstantiationService(undefined, disposables);
+		const commands: { id: string; args: unknown[] }[] = [];
+		instantiationService.stub(ICommandService, {
+			_serviceBrand: undefined,
+			onWillExecuteCommand: Event.None,
+			onDidExecuteCommand: Event.None,
+			executeCommand: async (id: string, ...args: unknown[]) => {
+				commands.push({ id, args });
+			},
+		});
+		const hoverService = new TestHoverService();
+		instantiationService.stub(IHoverService, hoverService);
+		const recordingUri = URI.file('/recording/manifest.json');
+		const chatResource = URI.parse('test-chat://host-a/chat-a');
+		const notification = {
+			kind: 'systemNotification' as const,
+			content: new MarkdownString('Entered text in TextEdit'),
+			icon: Codicon.playCircle,
+			presentation: 'computerUseRecording' as const,
+			accessibilityLabel: 'Entered text in TextEdit. Computer Use video recording, 0:04.',
+			computerUseRecording: {
+				title: 'Entered text in TextEdit',
+				durationMs: 4000,
+				trimmed: false,
+				recordingUri,
+				command: {
+					id: 'sessions.openComputerUseRecording',
+					title: 'Play Entered text in TextEdit',
+					arguments: [recordingUri.toString(), 'Entered text in TextEdit'],
+				},
+			},
+		};
+		const part = disposables.add(instantiationService.createInstance(
+			ChatSystemNotificationContentPart,
+			notification,
+			{ render: markdown => renderMarkdown(markdown) },
+			upcastPartial<IChatContentPartRenderContext>({
+				element: upcastPartial<IChatResponseViewModel>({ sessionResource: chatResource }),
+			}),
+		));
+		const button = part.domNode.querySelector<HTMLElement>('.chat-computer-use-recording-button');
+		assert.ok(button);
+		button.click();
+		await Promise.resolve();
+
+		assert.deepStrictEqual({
+			title: part.domNode.querySelector('.chat-computer-use-recording-title')?.textContent,
+			kind: part.domNode.querySelector('.chat-computer-use-recording-kind')?.textContent,
+			duration: part.domNode.querySelector('.chat-computer-use-recording-duration')?.textContent,
+			hasPlay: !!part.domNode.querySelector('.chat-computer-use-recording-play .codicon-play'),
+			ariaLabel: button.getAttribute('aria-label'),
+			inlineTiming: !!part.inlineTimingContainer,
+			hover: hoverService.content,
+			commands,
+			sameContent: part.hasSameContent(notification),
+		}, {
+			title: 'Entered text in TextEdit',
+			kind: 'Computer Use recording',
+			duration: '0:04',
+			hasPlay: true,
+			ariaLabel: 'Entered text in TextEdit. Computer Use video recording, 0:04.',
+			inlineTiming: false,
+			hover: 'Entered text in TextEdit',
+			commands: [{
+				id: 'sessions.openComputerUseRecording',
+				args: [recordingUri.toString(), 'Entered text in TextEdit', chatResource.toString()],
+			}],
+			sameContent: true,
+		});
+	});
+
 	test('renders background agent titles as code without exposing markdown delimiters', () => {
 		const disposables = store.add(new DisposableStore());
 		const instantiationService = workbenchInstantiationService(undefined, disposables);
@@ -92,7 +172,7 @@ suite('ChatSystemNotificationContentPart', () => {
 		const names = ['Renderer reviewer', 'Review `permissions`', '[Renderer](command:unused)'];
 		const rendered = names.map(name => {
 			const content = new MarkdownString(`Background agent ${appendEscapedMarkdownInlineCode(name)} is complete`);
-			const part = disposables.add(instantiationService.createInstance(ChatSystemNotificationContentPart, { kind: 'systemNotification', content }, renderer));
+			const part = disposables.add(instantiationService.createInstance(ChatSystemNotificationContentPart, { kind: 'systemNotification', content }, renderer, undefined));
 			return {
 				titles: [...part.domNode.querySelectorAll('code')].map(code => code.textContent),
 				text: part.domNode.textContent,
@@ -131,6 +211,7 @@ suite('ChatSystemNotificationContentPart', () => {
 			ChatSystemNotificationContentPart,
 			notification,
 			renderer,
+			undefined,
 		));
 		const header = part.domNode.querySelector<HTMLElement>('.chat-system-notification-disclosure-header')!;
 		const details = part.domNode.querySelector<HTMLElement>('.chat-system-notification-disclosure-body')!;
@@ -209,11 +290,13 @@ suite('ChatSystemNotificationContentPart', () => {
 			ChatSystemNotificationContentPart,
 			{ kind: 'systemNotification', content: new MarkdownString('Summary\n\n- Detail'), collapsible: true },
 			renderer,
+			undefined,
 		));
 		const withoutDetails = disposables.add(instantiationService.createInstance(
 			ChatSystemNotificationContentPart,
 			{ kind: 'systemNotification', content: new MarkdownString('Summary\n\n'), collapsible: true },
 			renderer,
+			undefined,
 		));
 
 		assert.deepStrictEqual({
@@ -247,7 +330,7 @@ suite('ChatSystemNotificationContentPart', () => {
 			workspaceName: 'working',
 			accessibilityLabel: 'Workspace changed. This session is now working in working using an isolated worktree.',
 		};
-		const part = disposables.add(instantiationService.createInstance(ChatSystemNotificationContentPart, notification, renderer));
+		const part = disposables.add(instantiationService.createInstance(ChatSystemNotificationContentPart, notification, renderer, undefined));
 		part.domNode.style.setProperty('--vscode-codiconFontSize-compact', '12px');
 		mainWindow.document.body.appendChild(part.domNode);
 		disposables.add({ dispose: () => part.domNode.remove() });

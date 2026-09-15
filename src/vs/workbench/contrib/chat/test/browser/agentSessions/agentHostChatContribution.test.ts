@@ -29,7 +29,7 @@ import { ILogService, NullLogService } from '../../../../../../platform/log/comm
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { IAgentCreateSessionConfig, IAgentHostService, IAgentSessionMetadata, AgentSession } from '../../../../../../platform/agentHost/common/agentService.js';
 import type { ChatInputRequestWithPlanReview } from '../../../../../../platform/agentHost/common/agentHostPlanReview.js';
-import { agentHostAuthority, createAgentHostResourceUriMapper, fromAgentHostUri, identityAgentHostResourceUriMapper, toAgentHostUri } from '../../../../../../platform/agentHost/common/agentHostUri.js';
+import { agentHostAuthority, createAgentHostResourceUriMapper, fromAgentHostUri, identityAgentHostResourceUriMapper, toAgentHostContentUri, toAgentHostUri } from '../../../../../../platform/agentHost/common/agentHostUri.js';
 import { AgentFeedbackAttachmentDisplayKind, AgentFeedbackAttachmentMetadataKey } from '../../../../../../platform/agentHost/common/meta/agentFeedbackAttachments.js';
 import { VSCODE_EPHEMERAL_SESSION_META_KEY } from '../../../../../../platform/agentHost/common/meta/agentEphemeralSessionMeta.js';
 import { getElementAttachmentCorrelationId, toElementAttachmentMeta } from '../../../../../../platform/agentHost/common/meta/agentElementAttachments.js';
@@ -55,7 +55,7 @@ import { IAuthenticationMcpUsageService } from '../../../../../services/authenti
 import { ChatEntitlement, IChatEntitlementService } from '../../../../../services/chat/common/chatEntitlementService.js';
 import { IChatAgentData, IChatAgentImplementation, IChatAgentRequest, IChatAgentService } from '../../../common/participants/chatAgents.js';
 import { CHAT_SUBAGENT_RESOURCE_QUERY_PARAM, ChatAIDisabledSettingId, ChatAgentLocation, ChatConfiguration, ChatModeKind } from '../../../common/constants.js';
-import { ChatErrorLevel, ChatRequestQueueKind, ElicitationState, IChatService, IRemotePendingRequest, IChatMarkdownContent, IChatMcpAuthenticationRequired, IChatProgress, IChatSubagentToolInvocationData, IChatTerminalToolInvocationData, IChatToolInputInvocationData, IChatToolInvocation, IChatToolInvocationSerialized, IChatUsage, ToolConfirmKind } from '../../../common/chatService/chatService.js';
+import { ChatErrorLevel, ChatRequestQueueKind, ElicitationState, IChatService, IRemotePendingRequest, IChatMarkdownContent, IChatMcpAuthenticationRequired, IChatProgress, IChatSubagentToolInvocationData, IChatSystemNotificationPart, IChatTerminalToolInvocationData, IChatToolInputInvocationData, IChatToolInvocation, IChatToolInvocationSerialized, IChatUsage, ToolConfirmKind } from '../../../common/chatService/chatService.js';
 import { IChatDebugService } from '../../../common/chatDebugService.js';
 import { IChatEditingService } from '../../../common/editing/chatEditingService.js';
 import { IChatResponseFileChangesService } from '../../../browser/chatResponseFileChangesService.js';
@@ -114,10 +114,10 @@ import { ChatQuestionCarouselData } from '../../../common/model/chatProgressType
 import { ChatPlanReviewData } from '../../../common/model/chatProgressTypes/chatPlanReviewData.js';
 import { ChatElicitationRequestPart } from '../../../common/model/chatProgressTypes/chatElicitationRequestPart.js';
 import { ChatToolInvocation } from '../../../common/model/chatProgressTypes/chatToolInvocation.js';
-import { ChatResponseModel, reviveSerializableInputState, type ChatModel, type ChatRequestModel, type IChatModel, type IChatModelInputState, type IChatPendingRequest, type IChatRequestModel, type IInputModel } from '../../../common/model/chatModel.js';
+import { ChatResponseModel, reviveSerializableInputState, type ChatModel, type ChatRequestModel, type IChatModel, type IChatModelInputState, type IChatPendingRequest, type IChatRequestModel, type IChatResponseModel, type IInputModel } from '../../../common/model/chatModel.js';
 import { convertBufferToScreenshotVariable } from '../../../browser/attachments/chatScreenshotContext.js';
 import { AgentHostCompletionReferenceKind, ChatPasteAttachmentMetadata, createChatReferenceVariableEntry, isChatReferenceVariableEntry, toAgentHostCompletionVariableEntry, type IChatRequestVariableEntry } from '../../../common/attachments/chatVariableEntries.js';
-import { messageAttachmentsToVariableData } from '../../../browser/agentSessions/agentHost/stateToProgressAdapter.js';
+import { messageAttachmentsToVariableData, systemNotificationToChatPart } from '../../../browser/agentSessions/agentHost/stateToProgressAdapter.js';
 import { AgentHostSessionReferenceAttachmentDisplayKind, AgentHostSessionReferenceAttachmentMetadataKey, AgentHostSessionReferenceTrajectoryAttachmentDisplayKind, toSessionReferenceModelRepresentation } from '../../../browser/agentSessions/agentHost/agentHostSessionReferenceAttachment.js';
 import { IAgentHostEnablementService } from '../../../../../../platform/agentHost/common/agentHostEnablementService.js';
 import { CellUri } from '../../../../notebook/common/notebookCommon.js';
@@ -1323,6 +1323,51 @@ suite('AgentHostChatContribution', () => {
 				resolved: toAgentHostUri(file, authority).toString(),
 				hostUri: file.toString(),
 			})));
+		});
+
+		suite('Computer Use recordings', () => {
+			test('renders a restored host recording as a durable playback command', () => {
+				const recordingUri = toAgentHostContentUri(URI.file('/host/session/recording/manifest.json'), 'remote-host');
+				const part = systemNotificationToChatPart('Computer Use recording', 'remote-host', toAgentSystemNotificationMeta({
+					kind: AgentSystemNotificationKind.ComputerUseRecording,
+					recordingUri: 'file:///host/session/recording/manifest.json',
+					recordingTitle: 'Entered text in TextEdit',
+					durationMs: 125_000,
+					sizeBytes: 42_000,
+					trimmed: true,
+				}));
+				assert.deepStrictEqual(part, {
+					kind: 'systemNotification',
+					content: new MarkdownString('Entered text in TextEdit'),
+					icon: Codicon.playCircle,
+					presentation: 'computerUseRecording',
+					accessibilityLabel: 'Entered text in TextEdit. Computer Use video recording, last 2:05.',
+					computerUseRecording: {
+						title: 'Entered text in TextEdit',
+						durationMs: 125_000,
+						trimmed: true,
+						recordingUri,
+						command: {
+							id: 'sessions.openComputerUseRecording',
+							title: 'Play Entered text in TextEdit',
+							tooltip: 'Open this host-recorded Computer Use session in the Computer Use player.',
+							arguments: [recordingUri.toString(), 'Entered text in TextEdit'],
+						},
+					},
+				});
+			});
+
+			test('falls back to the durable notice when recording metadata is malformed', () => {
+				const part = systemNotificationToChatPart('Computer Use recording unavailable', 'remote-host', {
+					kind: AgentSystemNotificationKind.ComputerUseRecording,
+					recordingUri: 'file:///recording.json',
+					durationMs: -1,
+				});
+				assert.deepStrictEqual(part, {
+					kind: 'systemNotification',
+					content: new MarkdownString('Computer Use recording unavailable'),
+				});
+			});
 		});
 
 		test('uses the WSL connection for image paths and preserves encoded path characters', () => {
@@ -12752,6 +12797,86 @@ suite('AgentHostChatContribution', () => {
 			await timeout(10);
 
 			assert.strictEqual(chatSession.isCompleteObs!.get(), true);
+		}));
+
+		test('attaches a live recording notice to the completed source response', () => runWithFakedTimers({ useFakeTimers: true }, async () => {
+			const { sessionHandler, agentHostService, chatAgentService, chatService } = createContribution(disposables);
+			const sessionResource = URI.from({ scheme: 'agent-host-copilot', path: '/recording-attachment' });
+			const chatSession = await sessionHandler.provideChatSessionContent(sessionResource, CancellationToken.None);
+			disposables.add(toDisposable(() => chatSession.dispose()));
+			const registered = chatAgentService.registeredAgents.get('agent-host-copilot')!;
+			const turn = registered.impl.invoke(
+				makeRequest({ message: 'Use the computer', sessionResource }),
+				() => { }, [], CancellationToken.None,
+			);
+			await timeout(10);
+			const dispatch = agentHostService.turnActions[0];
+			const sourceAction = dispatch.action as ITurnStartedAction;
+			const session = dispatch.channel.toString();
+			agentHostService.fireAction({ channel: session, action: dispatch.action, serverSeq: 1, origin: { clientId: agentHostService.clientId, clientSeq: dispatch.clientSeq } });
+			agentHostService.fireAction({
+				channel: session,
+				action: { type: ActionType.ChatTurnComplete, turnId: sourceAction.turnId, duration: 1 },
+				serverSeq: 2,
+				origin: undefined,
+			});
+			await turn;
+
+			const appended: IChatSystemNotificationPart[] = [];
+			const response = upcastPartial<IChatResponseModel>({
+				isComplete: true,
+				updateContent: progress => {
+					if (progress.kind === 'systemNotification') {
+						appended.push(progress);
+					}
+				},
+			});
+			chatService.setSession(sessionResource, upcastPartial<IChatModel>({
+				sessionResource,
+				onDidChangePendingRequests: Event.None,
+				getPendingRequests: () => [],
+				getRequests: () => [upcastPartial<IChatRequestModel>({ response })],
+			}));
+			let serverRequests = 0;
+			disposables.add(chatSession.onDidStartServerRequest!(() => serverRequests++));
+			const meta = toAgentSystemNotificationMeta({
+				kind: AgentSystemNotificationKind.ComputerUseRecording,
+				recordingUri: 'file:///recording/manifest.json',
+				recordingTitle: 'Entered text in TextEdit',
+				durationMs: 4000,
+				sizeBytes: 1024,
+				trimmed: false,
+			});
+			const recordingTurnId = 'recording-turn';
+			agentHostService.fireAction({
+				channel: session,
+				action: {
+					type: ActionType.ChatTurnStarted,
+					turnId: recordingTurnId,
+					startedAt: '2025-01-01T00:00:00.000Z',
+					message: { text: 'hidden-prefix-is-not-rendered', origin: { kind: MessageKind.SystemNotification }, _meta: meta },
+				},
+				serverSeq: 3,
+				origin: undefined,
+			});
+			await timeout(10);
+			agentHostService.fireAction({
+				channel: session,
+				action: { type: ActionType.ChatTurnComplete, turnId: recordingTurnId, duration: 0 },
+				serverSeq: 4,
+				origin: undefined,
+			});
+
+			assert.deepStrictEqual({
+				serverRequests,
+				appended: appended.map(progress => ({
+					kind: progress.kind,
+					title: progress.kind === 'systemNotification' ? progress.computerUseRecording?.title : undefined,
+				})),
+			}, {
+				serverRequests: 0,
+				appended: [{ kind: 'systemNotification', title: 'Entered text in TextEdit' }],
+			});
 		}));
 
 		test('stale completion from a replaced server turn does not complete the next response', () => runWithFakedTimers({ useFakeTimers: true }, async () => {

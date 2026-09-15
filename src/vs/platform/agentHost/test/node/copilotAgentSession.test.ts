@@ -151,6 +151,11 @@ class MockCopilotSession {
 	readonly mcpDisableCalls: Array<{ serverName: string }> = [];
 	readonly mcpStartServerCalls: Array<{ serverName: string }> = [];
 	readonly mcpStopServerCalls: Array<{ serverName: string }> = [];
+	readonly mcpResourceReadCalls: Array<{ serverName: string; uri: string }> = [];
+	readonly mcpResourceReadGates: Promise<void>[] = [];
+	readonly mcpResourceReadOperationLog: string[] = [];
+	mcpResourceReadsActive = 0;
+	maxConcurrentMcpResourceReads = 0;
 	readonly samplingResponses: Parameters<CopilotSession['rpc']['ui']['handlePendingSampling']>[0][] = [];
 	readonly registeredEventInterests: string[] = [];
 	readonly releasedEventInterests: string[] = [];
@@ -448,6 +453,21 @@ class MockCopilotSession {
 			},
 		},
 		mcp: {
+			apps: {
+				readResource: async (params: { serverName: string; uri: string }) => {
+					this.mcpResourceReadCalls.push(params);
+					this.mcpResourceReadOperationLog.push(`start:${params.uri}`);
+					this.mcpResourceReadsActive++;
+					this.maxConcurrentMcpResourceReads = Math.max(this.maxConcurrentMcpResourceReads, this.mcpResourceReadsActive);
+					try {
+						await this.mcpResourceReadGates.shift();
+						return { contents: [] };
+					} finally {
+						this.mcpResourceReadsActive--;
+						this.mcpResourceReadOperationLog.push(`end:${params.uri}`);
+					}
+				},
+			},
 			list: async () => {
 				if (this.mcpListError !== undefined) {
 					throw this.mcpListError;
@@ -12750,6 +12770,70 @@ Use the attached image as context.
 			const signal = await waitForSignal(s => isAction(s, ActionType.ChatInputRequested));
 			session.respondToUserInputRequest(getInputRequest(signal).id, ChatInputResponseKind.Decline);
 			await responsePromise;
+		});
+	});
+
+	suite('MCP app requests', () => {
+
+		test('serializes Computer Use resource reads', async () => {
+			const firstReadGate = new DeferredPromise<void>();
+			const secondReadGate = new DeferredPromise<void>();
+			const { session, mockSession } = await createAgentSession(disposables, {
+				configureMockSession: mock => mock.mcpResourceReadGates.push(firstReadGate.p, secondReadGate.p),
+			});
+			const firstUri = 'computer-use://video/live?streamId=stream&after=1';
+			const secondUri = 'computer-use://video/live?streamId=stream&after=2';
+
+			const firstRead = session.handleMcpRequest('computer-use', 'resources/read', { uri: firstUri });
+			const secondRead = session.handleMcpRequest('computer-use', 'resources/read', { uri: secondUri });
+			await timeout(0);
+			firstReadGate.complete();
+			secondReadGate.complete();
+			await Promise.all([firstRead, secondRead]);
+
+			assert.deepStrictEqual({
+				calls: mockSession.mcpResourceReadCalls,
+				operationLog: mockSession.mcpResourceReadOperationLog,
+				maxConcurrentReads: mockSession.maxConcurrentMcpResourceReads,
+			}, {
+				calls: [
+					{ serverName: 'computer-use', uri: firstUri },
+					{ serverName: 'computer-use', uri: secondUri },
+				],
+				operationLog: [
+					`start:${firstUri}`,
+					`end:${firstUri}`,
+					`start:${secondUri}`,
+					`end:${secondUri}`,
+				],
+				maxConcurrentReads: 1,
+			});
+		});
+
+		test('does not serialize resource reads for other MCP servers', async () => {
+			const firstReadGate = new DeferredPromise<void>();
+			const secondReadGate = new DeferredPromise<void>();
+			const { session, mockSession } = await createAgentSession(disposables, {
+				configureMockSession: mock => mock.mcpResourceReadGates.push(firstReadGate.p, secondReadGate.p),
+			});
+
+			const firstRead = session.handleMcpRequest('docs', 'resources/read', { uri: 'file:///first' });
+			const secondRead = session.handleMcpRequest('docs', 'resources/read', { uri: 'file:///second' });
+			await timeout(0);
+			firstReadGate.complete();
+			secondReadGate.complete();
+			await Promise.all([firstRead, secondRead]);
+
+			assert.deepStrictEqual({
+				calls: mockSession.mcpResourceReadCalls,
+				maxConcurrentReads: mockSession.maxConcurrentMcpResourceReads,
+			}, {
+				calls: [
+					{ serverName: 'docs', uri: 'file:///first' },
+					{ serverName: 'docs', uri: 'file:///second' },
+				],
+				maxConcurrentReads: 2,
+			});
 		});
 	});
 

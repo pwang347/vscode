@@ -324,6 +324,47 @@ suite('stateToProgressAdapter', () => {
 			assert.strictEqual(serialized.isComplete, true);
 		});
 
+		test('places a persisted Computer Use recording in the source response before its footer', () => {
+			const recordingMeta = toAgentSystemNotificationMeta({
+				kind: AgentSystemNotificationKind.ComputerUseRecording,
+				recordingUri: 'file:///recording/manifest.json',
+				recordingTitle: 'Entered text in TextEdit',
+				durationMs: 4000,
+				sizeBytes: 1024,
+				trimmed: false,
+			});
+			const source = createTurn({
+				id: 'source-turn',
+				message: message('Use the computer'),
+				responseParts: [{ kind: ResponsePartKind.Markdown, id: 'answer', content: 'Done.' }],
+			});
+			const recording = createTurn({
+				id: 'recording-turn',
+				message: { ...message('Entered text in TextEdit', MessageKind.SystemNotification), _meta: recordingMeta },
+				responseParts: [{
+					kind: ResponsePartKind.SystemNotification,
+					content: 'Entered text in TextEdit',
+					_meta: recordingMeta,
+				}],
+			});
+
+			const history = turnsToHistory(URI.file('/'), [source, recording], 'participant-1');
+
+			assert.deepStrictEqual({
+				itemTypes: history.map(item => item.type),
+				responseParts: history[1].type === 'response' ? history[1].parts.map(part => ({
+					kind: part.kind,
+					presentation: part.kind === 'systemNotification' ? part.presentation : undefined,
+				})) : [],
+			}, {
+				itemTypes: ['request', 'response'],
+				responseParts: [
+					{ kind: 'markdownContent', presentation: undefined },
+					{ kind: 'systemNotification', presentation: 'computerUseRecording' },
+				],
+			});
+		});
+
 		test('system-initiated turn preserves compact request label', () => {
 			const turn = createTurn({
 				message: withMessageSystemInitiatedLabel(
