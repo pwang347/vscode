@@ -6,7 +6,7 @@
 import { ChildProcess, fork } from 'child_process';
 import { cp, lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'fs/promises';
 import { raceTimeout } from '../../../../base/common/async.js';
-import { Schemas } from '../../../../base/common/network.js';
+import { connectionTokenQueryName, Schemas } from '../../../../base/common/network.js';
 import { createRequire } from 'module';
 import { mkdirSync } from 'fs';
 import { userInfo } from 'os';
@@ -158,8 +158,14 @@ export class TestProtocolClient {
 		port: number,
 		private readonly _takeReplayError?: () => Error | undefined,
 		private readonly _setWorkingDirectory?: (workingDirectory: string) => void,
+		options?: { readonly connectionToken?: string },
 	) {
-		this._ws = new WebSocket(`ws://127.0.0.1:${port}`);
+		const url = new URL(`ws://127.0.0.1:${port}`);
+		if (options?.connectionToken !== undefined) {
+			assertTestConnectionToken(options.connectionToken);
+			url.searchParams.set(connectionTokenQueryName, options.connectionToken);
+		}
+		this._ws = new WebSocket(url);
 	}
 
 	async connect(): Promise<void> {
@@ -790,7 +796,8 @@ async function startMockLlmServer(scenarios?: readonly IMockScenario[]): Promise
 	}
 	const messages: string[] = [];
 	const serverHandle = await mockModule.startServer(0, { logger: msg => messages.push(msg), verbose: true, captureRequests: true });
-	return { ...serverHandle, logMessages: messages };
+	let closePromise: Promise<void> | undefined;
+	return { ...serverHandle, logMessages: messages, close: () => closePromise ??= serverHandle.close() };
 }
 
 export async function startServer(options?: { readonly quiet?: boolean; readonly userDataDir?: string; readonly env?: NodeJS.ProcessEnv; readonly startupTimeoutMs?: number }): Promise<IServerHandle> {
@@ -842,7 +849,16 @@ export async function startServer(options?: { readonly quiet?: boolean; readonly
  * Start the agent host server with the Copilot SDK agent with either a real or mocked LLM.
  * The server is started with logging enabled so the CopilotAgent is registered.
  */
-export async function startRealServer(options: { readonly homeDir: string; readonly claudeSdkRoot?: string; readonly codexSdkRoot?: string; readonly codexHomeDir?: string; readonly codexAgentEnabled?: boolean; readonly mockLlm?: boolean; readonly userDataDir?: string; readonly logLevel?: string; readonly env?: NodeJS.ProcessEnv; readonly capiReplay?: { readonly fixturePath: string; readonly mode?: CapiReplayMode; readonly workDir?: string; readonly real?: boolean; readonly allowPosixCommands?: boolean; readonly allowStaleRecordedRequest?: boolean; readonly recordingModelResponse?: ICapiReplayResponse }; readonly existingCapiReplay?: CapiReplayProxy; readonly mockScenarios?: readonly IMockScenario[] }): Promise<IServerHandle> {
+function assertTestConnectionToken(token: string): void {
+	if (!/^[0-9A-Za-z_-]+$/.test(token)) {
+		throw new Error('A test connection token must be nonempty and contain only letters, digits, underscores or hyphens');
+	}
+}
+
+export async function startRealServer(options: { readonly homeDir: string; readonly claudeSdkRoot?: string; readonly codexSdkRoot?: string; readonly codexHomeDir?: string; readonly codexAgentEnabled?: boolean; readonly mockLlm?: boolean; readonly userDataDir?: string; readonly logLevel?: string; readonly connectionToken?: string; readonly env?: NodeJS.ProcessEnv; readonly capiReplay?: { readonly fixturePath: string; readonly mode?: CapiReplayMode; readonly workDir?: string; readonly real?: boolean; readonly allowPosixCommands?: boolean; readonly allowStaleRecordedRequest?: boolean; readonly recordingModelResponse?: ICapiReplayResponse }; readonly existingCapiReplay?: CapiReplayProxy; readonly mockScenarios?: readonly IMockScenario[] }): Promise<IServerHandle> {
+	if (options.connectionToken !== undefined) {
+		assertTestConnectionToken(options.connectionToken);
+	}
 	// `capiReplay` records/replays in front of the mock LLM server, so it implies
 	// a mock upstream even when `mockLlm` was not explicitly requested — unless
 	// `real` is set, in which case the proxy forwards to real CAPI/GitHub.
@@ -881,7 +897,7 @@ export async function startRealServer(options: { readonly homeDir: string; reado
 	const capiUrl = capiReplayProxy?.url ?? mockLlmServer?.url;
 	return new Promise((resolve, reject) => {
 		const serverPath = fileURLToPath(new URL('../../node/agentHostServerMain.js', import.meta.url));
-		const args = ['--port', '0', '--without-connection-token'];
+		const args = ['--port', '0', ...(options.connectionToken === undefined ? ['--without-connection-token'] : ['--connection-token', options.connectionToken])];
 		if (options.claudeSdkRoot) {
 			args.push('--claude-sdk-root', options.claudeSdkRoot);
 		}

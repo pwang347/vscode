@@ -26,7 +26,7 @@ interface IComputerUsePluginOptions {
 
 /** Resolves the native desktop bundle without starting it or requesting OS permissions. */
 export async function resolveCopilotComputerUsePlugin(options: IComputerUsePluginOptions, logService: ILogService): Promise<string | undefined> {
-	if (options.platform !== 'darwin' || (options.hostLaunchKind !== AgentHostLaunchKind.VSCodeMainProcess && !options.remoteEnabled)) {
+	if ((options.platform !== 'darwin' && options.platform !== 'win32') || (options.hostLaunchKind !== AgentHostLaunchKind.VSCodeMainProcess && !options.remoteEnabled)) {
 		return undefined;
 	}
 
@@ -46,27 +46,28 @@ export async function resolveCopilotComputerUsePlugin(options: IComputerUsePlugi
 		throw error;
 	}
 
-	const apps = entries.filter(entry => entry.isDirectory() && entry.name.endsWith('.app'));
-	if (apps.length !== 1) {
-		throw new Error(localize('computerUse.nativeApp', "Computer Use requires exactly one native helper app in {0}.", pluginPath));
-	}
-
 	const manifest: { readonly name?: unknown } = JSON.parse(await fs.readFile(join(pluginPath, '.plugin', 'plugin.json'), 'utf8'));
 	if (!isObject(manifest) || manifest.name !== COPILOT_COMPUTER_USE_SERVER_NAME) {
 		throw new Error(localize('computerUse.invalidManifest', "Invalid Computer Use plugin manifest in {0}.", pluginPath));
 	}
-	for (const file of [
-		join(pluginPath, '.mcp.json'),
-		join(pluginPath, 'computer-use-mcp'),
-		join(pluginPath, apps[0].name, 'Contents', 'Info.plist'),
-	]) {
+	const requiredFiles = [join(pluginPath, '.mcp.json')];
+	if (options.platform === 'win32') {
+		requiredFiles.push(join(pluginPath, 'computer-use-mcp.exe'), join(pluginPath, 'CopilotComputerUse.exe'));
+	} else {
+		const apps = entries.filter(entry => entry.isDirectory() && entry.name.endsWith('.app'));
+		if (apps.length !== 1) {
+			throw new Error(localize('computerUse.nativeApp', "Computer Use requires exactly one native helper app in {0}.", pluginPath));
+		}
+		requiredFiles.push(join(pluginPath, 'computer-use-mcp'), join(pluginPath, apps[0].name, 'Contents', 'Info.plist'));
+		const executables = await fs.readdir(join(pluginPath, apps[0].name, 'Contents', 'MacOS'), { withFileTypes: true });
+		if (!executables.some(entry => entry.isFile())) {
+			throw new Error(localize('computerUse.missingExecutable', "Computer Use native helper has no executable in {0}.", pluginPath));
+		}
+	}
+	for (const file of requiredFiles) {
 		if (!(await fs.stat(file)).isFile()) {
 			throw new Error(localize('computerUse.requiredFile', "Computer Use requires a file at {0}.", file));
 		}
-	}
-	const executables = await fs.readdir(join(pluginPath, apps[0].name, 'Contents', 'MacOS'), { withFileTypes: true });
-	if (!executables.some(entry => entry.isFile())) {
-		throw new Error(localize('computerUse.missingExecutable', "Computer Use native helper has no executable in {0}.", pluginPath));
 	}
 
 	return pluginPath;

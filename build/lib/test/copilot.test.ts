@@ -189,7 +189,27 @@ suite('copilot', () => {
 				remote: matchesGlob(`remote/${packageDir}/${file}`, remote),
 			})), relativeFiles.map(() => ({ desktop: true, excluded: false, remote: true })));
 		}
-		assertOptionalCopilotNativeDependenciesExcluded(getCopilotRuntimePrebuildFiles('win32', 'x64', 'node_modules', true), 'node_modules/@github/copilot-win32-x64');
+		assertOptionalCopilotNativeDependenciesExcluded(getCopilotRuntimePrebuildFiles('linux', 'x64', 'node_modules', true), 'node_modules/@github/copilot-linux-x64');
+	});
+
+	test('includes both Windows Computer Use executables and manifests in desktop and remote packaging', () => {
+		const relativeFiles = [
+			'plugins/computer-use/.plugin/plugin.json',
+			'plugins/computer-use/.mcp.json',
+			'plugins/computer-use/computer-use-mcp.exe',
+			'plugins/computer-use/CopilotComputerUse.exe',
+		];
+		for (const arch of ['arm64', 'x64']) {
+			const packageDir = `node_modules/@github/copilot-win32-${arch}`;
+			const desktop = getCopilotRuntimePrebuildFiles('win32', arch, 'node_modules', true);
+			const excluded = getCopilotRuntimePrebuildFiles('win32', arch);
+			const remote = getCopilotRuntimePrebuildFiles('win32', arch, 'remote/node_modules', true);
+			assert.deepStrictEqual(relativeFiles.map(file => ({
+				desktop: matchesGlob(`${packageDir}/${file}`, desktop),
+				excluded: matchesGlob(`${packageDir}/${file}`, excluded),
+				remote: matchesGlob(`remote/${packageDir}/${file}`, remote),
+			})), relativeFiles.map(() => ({ desktop: true, excluded: false, remote: true })));
+		}
 	});
 
 	test('preserves upstream signatures only within the macOS Computer Use bundle', () => {
