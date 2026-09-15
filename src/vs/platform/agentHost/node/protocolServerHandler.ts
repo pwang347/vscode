@@ -67,6 +67,7 @@ import {
 	type OtlpLogLevelName,
 } from '../common/otlp/otlpLogEmitter.js';
 import { isFileResourceRead } from '../common/resourceReadLogging.js';
+import { parseResourceReadRangeParams, ResourceReadRangeExtensionMethod } from '../common/agentHostResourceReadRange.js';
 import type { Implementation } from '../common/state/protocol/common/commands.js';
 import { AGENT_HOST_CLIENT_CONNECTION_HISTORY_RETENTION, IAgentHostClientConnectionService, type IAgentHostClientConnectionSource } from './agentHostClientConnectionService.js';
 import { AgentHostTelemetryReporter } from './agentHostTelemetryReporter.js';
@@ -320,6 +321,8 @@ export interface IProtocolServerConfig {
 	 * Defaults to `true` for existing remote listeners.
 	 */
 	readonly allowExtensionMethods?: boolean;
+	/** Allow bounded file reads on data-plane listeners without enabling management extensions. */
+	readonly allowResourceReadRange?: boolean;
 	/**
 	 * Characters that, when typed in a {@link UserMessage} input, SHOULD
 	 * cause the client to issue a `completions` request. Announced to
@@ -679,7 +682,10 @@ export class ProtocolServerHandler extends Disposable implements IAgentHostClien
 			const response: IAgentHostExtensionInitializeResult = {
 				protocolVersion: negotiated,
 				serverSeq: this._stateManager.serverSeq,
-				_meta: getAgentHostExtensionInitializeResultMeta(this._config.allowExtensionMethods !== false && !!this._agentService.removeSessionArtifact),
+				_meta: getAgentHostExtensionInitializeResultMeta(
+					this._config.allowExtensionMethods !== false && !!this._agentService.removeSessionArtifact,
+					this._resourceReadRangeEnabled && !!this._agentService.resourceReadRange,
+				),
 				snapshots,
 				defaultDirectory: this._config.defaultDirectory,
 				completionTriggerCharacters: this._config.completionTriggerCharacters ? [...this._config.completionTriggerCharacters] : undefined,
@@ -1813,7 +1819,9 @@ export class ProtocolServerHandler extends Disposable implements IAgentHostClien
 			this._trackRequest(extensionResult).then(result => {
 				client.transport.send(jsonRpcSuccess(id, result ?? null));
 			}).catch(err => {
-				this._logService.error(`[ProtocolServer] Extension request '${method}' failed`, err);
+				if (shouldLogFailedRequest(method, params, err)) {
+					this._logService.error(`[ProtocolServer] Extension request '${method}' failed`, err);
+				}
 				client.transport.send(jsonRpcErrorFrom(id, err));
 			});
 			return;
@@ -1862,6 +1870,16 @@ export class ProtocolServerHandler extends Disposable implements IAgentHostClien
 	 * otherwise.
 	 */
 	private _handleExtensionRequest(method: string, params: unknown): Promise<unknown> | undefined {
+		if (method === ResourceReadRangeExtensionMethod) {
+			if (!this._resourceReadRangeEnabled || !this._agentService.resourceReadRange) {
+				return undefined;
+			}
+			try {
+				return this._agentService.resourceReadRange(parseResourceReadRangeParams(params));
+			} catch (error) {
+				return Promise.reject(error);
+			}
+		}
 		if (this._config.allowExtensionMethods === false) {
 			return undefined;
 		}
@@ -2096,6 +2114,10 @@ export class ProtocolServerHandler extends Disposable implements IAgentHostClien
 			default:
 				return undefined;
 		}
+	}
+
+	private get _resourceReadRangeEnabled(): boolean {
+		return this._config.allowResourceReadRange ?? (this._config.allowExtensionMethods !== false);
 	}
 
 	// ---- Broadcasting -------------------------------------------------------

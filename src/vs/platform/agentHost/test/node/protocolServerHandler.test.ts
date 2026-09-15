@@ -39,6 +39,7 @@ import { AGENT_HOST_CLIENT_CONNECTION_HISTORY_RETENTION, AgentHostClientConnecti
 import { AgentHostManagedSettingsService } from '../../node/agentHostManagedSettingsService.js';
 import { AgentHostTelemetryService } from '../../node/agentHostTelemetryService.js';
 import { buildAnnotationsUri } from '../../common/annotationsUri.js';
+import { AGENT_HOST_RESOURCE_RANGE_MAX_BYTES, ResourceReadRangeCapabilityMetaKey, ResourceReadRangeExtensionMethod } from '../../common/agentHostResourceReadRange.js';
 
 // ---- Mock helpers -----------------------------------------------------------
 
@@ -305,6 +306,7 @@ class MockAgentService implements IAgentService {
 		}
 		return { data: '', encoding: ContentEncoding.Utf8 };
 	}
+	resourceReadRange: IAgentService['resourceReadRange'];
 	async resourceCopy(_params: ResourceCopyParams): Promise<ResourceCopyResult> { return {}; }
 	async resourceDelete(): Promise<{}> { return {}; }
 	async resourceMove(): Promise<{}> { return {}; }
@@ -477,6 +479,59 @@ suite('ProtocolServerHandler', () => {
 				'vscode.removeSessionArtifact': true,
 			},
 		});
+
+	});
+
+	test('advertises and dispatches bounded resource reads only when the service implements them', async () => {
+		const params = { channel: 'ahp-root://' as const, uri: 'file:///recording/manifest.json', offset: 4, length: 3, expectedSize: 10, expectedEtag: 'v1' };
+		const result = { encoding: 'base64' as const, data: 'YWJj', offset: 4, size: 10, etag: 'v1', eof: false };
+		const calls: unknown[] = [];
+		agentService.resourceReadRange = async value => { calls.push(value); return result; };
+		const transport = connectClient('range-client');
+		const response = findResponse(transport.sent, 1);
+		assert.ok(response && hasKey(response, { result: true }));
+		assert.deepStrictEqual((response.result as InitializeResult)._meta?.[ResourceReadRangeCapabilityMetaKey], {
+			version: 1, maxBytes: AGENT_HOST_RESOURCE_RANGE_MAX_BYTES,
+		});
+		const pending = waitForResponse(transport, 2);
+		transport.simulateMessage(request(2, ResourceReadRangeExtensionMethod, params));
+		assert.deepStrictEqual(await pending, { jsonrpc: '2.0', id: 2, result });
+		assert.deepStrictEqual(calls, [params]);
+		agentService.resourceReadRange = undefined;
+		const unsupported = connectClient('range-unavailable');
+		const absent = findResponse(unsupported.sent, 1);
+		assert.ok(absent && hasKey(absent, { result: true }));
+		assert.strictEqual((absent.result as InitializeResult)._meta?.[ResourceReadRangeCapabilityMetaKey], undefined);
+		unsupported.simulateMessage(request(3, ResourceReadRangeExtensionMethod, params));
+		assert.deepStrictEqual(findResponse(unsupported.sent, 3), {
+			jsonrpc: '2.0', id: 3, error: { code: JsonRpcErrorCodes.MethodNotFound, message: `Method not found: ${ResourceReadRangeExtensionMethod}` },
+		});
+	});
+
+	test('rejects invalid range params and pre-initialize requests before reaching the file service', async () => {
+		let reads = 0;
+		agentService.resourceReadRange = async () => { reads++; throw new Error('Must not read'); };
+		const transport = disposables.add(new MockProtocolTransport());
+		server.simulateConnection(transport);
+		transport.simulateMessage(request(1, ResourceReadRangeExtensionMethod, { channel: 'ahp-root://', uri: 'file:///recording/file', offset: 0, length: 1 }));
+		assert.strictEqual(reads, 0);
+		assert.deepStrictEqual(findResponse(transport.sent, 1), {
+			jsonrpc: '2.0', id: 1, error: { code: JsonRpcErrorCodes.MethodNotFound, message: `Method not found: ${ResourceReadRangeExtensionMethod}` },
+		});
+		const initialized = connectClient('range-invalid-params');
+		for (const [index, params] of [
+			{ channel: 'ahp-root://', uri: 'file:///recording/file', offset: 0, length: AGENT_HOST_RESOURCE_RANGE_MAX_BYTES + 1 },
+			{ channel: 'ahp-chat://other', uri: 'file:///recording/file', offset: 0, length: 1 },
+			{ channel: 'ahp-root://', uri: 'https://example.com/private', offset: 0, length: 1 },
+		].entries()) {
+			const id = index + 2;
+			const pending = waitForResponse(initialized, id);
+			initialized.simulateMessage(request(id, ResourceReadRangeExtensionMethod, params));
+			const response = await pending;
+			assert.ok(isJsonRpcResponse(response) && hasKey(response, { error: true }));
+			assert.strictEqual(response.error.code, JsonRpcErrorCodes.InvalidParams);
+		}
+		assert.strictEqual(reads, 0);
 	});
 
 	test('routes a workspace trust request to the initiating client', async () => {
@@ -1207,6 +1262,7 @@ suite('ProtocolServerHandler', () => {
 	});
 
 	test('extension methods can be disabled without blocking managed settings contributions', () => {
+		agentService.resourceReadRange = async () => { assert.fail('Disabled extension must not read files'); };
 		const localDisposables = disposables.add(new DisposableStore());
 		const localServer = localDisposables.add(new MockProtocolServer());
 		localDisposables.add(new ProtocolServerHandler(
@@ -1232,8 +1288,13 @@ suite('ProtocolServerHandler', () => {
 		const initializeResponse = findResponse(transport.sent, 1);
 		assert.ok(initializeResponse && hasKey(initializeResponse, { result: true }));
 		assert.strictEqual(supportsAgentHostArtifactRemoval(initializeResponse.result as InitializeResult), false);
+		assert.strictEqual((initializeResponse.result as InitializeResult)._meta?.[ResourceReadRangeCapabilityMetaKey], undefined);
 		transport.sent.length = 0;
 		transport.simulateMessage(request(2, 'shutdown', {}));
+		transport.simulateMessage(request(3, ResourceReadRangeExtensionMethod, { channel: 'ahp-root://', uri: 'file:///recording/file', offset: 0, length: 1 }));
+		assert.deepStrictEqual(findResponse(transport.sent, 3), {
+			jsonrpc: '2.0', id: 3, error: { code: JsonRpcErrorCodes.MethodNotFound, message: `Method not found: ${ResourceReadRangeExtensionMethod}` },
+		});
 		transport.simulateMessage(notification('setClientManagedSettingsPermissions', {
 			permissions: { disableBypassPermissionsMode: 'disable', ask: ['Shell'] },
 		}));
@@ -1258,6 +1319,35 @@ suite('ProtocolServerHandler', () => {
 
 		assert.strictEqual(resp.id, 9);
 		assert.strictEqual(resp.result, null);
+	});
+
+	test('data-plane listeners can permit bounded reads without enabling shutdown', async () => {
+		const result = { encoding: 'base64' as const, data: '', offset: 0, size: 1, etag: 'v1', eof: false };
+		agentService.resourceReadRange = async () => result;
+		const localDisposables = disposables.add(new DisposableStore());
+		const localServer = localDisposables.add(new MockProtocolServer());
+		localDisposables.add(new ProtocolServerHandler(
+			agentService, stateManager, localServer,
+			{ allowExtensionMethods: false, allowResourceReadRange: true },
+			localDisposables.add(new AgentHostFileSystemProvider()), logService,
+			NullTelemetryService, managedSettingsService, clientConnections,
+		));
+		const transport = localDisposables.add(new MockProtocolTransport());
+		localServer.simulateConnection(transport);
+		transport.simulateMessage(request(1, 'initialize', { protocolVersions: [PROTOCOL_VERSION], clientId: 'range-data-plane' }));
+		const initialized = findResponse(transport.sent, 1);
+		assert.ok(initialized && hasKey(initialized, { result: true }));
+		assert.deepStrictEqual((initialized.result as InitializeResult)._meta?.[ResourceReadRangeCapabilityMetaKey], {
+			version: 1, maxBytes: AGENT_HOST_RESOURCE_RANGE_MAX_BYTES,
+		});
+		const pending = waitForResponse(transport, 2);
+		transport.simulateMessage(request(2, ResourceReadRangeExtensionMethod, { channel: 'ahp-root://', uri: 'file:///recording/file', offset: 0, length: 0 }));
+		assert.deepStrictEqual(await pending, { jsonrpc: '2.0', id: 2, result });
+		transport.simulateMessage(request(3, 'shutdown', {}));
+		assert.deepStrictEqual(findResponse(transport.sent, 3), {
+			jsonrpc: '2.0', id: 3, error: { code: JsonRpcErrorCodes.MethodNotFound, message: 'Method not found: shutdown' },
+		});
+		assert.strictEqual(agentService.shutdownCalls, 0);
 	});
 
 	test('subscribe request returns snapshot', async () => {

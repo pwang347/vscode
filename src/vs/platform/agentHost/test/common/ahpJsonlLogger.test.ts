@@ -27,6 +27,20 @@ suite('AhpJsonlLogger', () => {
 			log: { jsonrpc: '2.0', id: 1, result: { contents: [{ uri: 'computer-use://video/live', redacted: 'live media' }] } },
 			original: '{"frames":["private-video"]}',
 		});
+
+	});
+
+	test('redacts bounded recording reads including file references and etags', () => {
+		const response = { jsonrpc: '2.0', id: 1, result: { encoding: 'base64', data: 'private-video-bytes', offset: 4, size: 100, etag: 'private-version', eof: false } };
+		const request = { jsonrpc: '2.0', id: 1, method: 'vscode/resourceReadRange', params: { channel: 'ahp-root://', uri: 'file:///private/recording.gop', offset: 4, length: 10, expectedEtag: 'private-version' } };
+		assert.deepStrictEqual(JSON.parse(stringifyAhpLogEntry(response)), {
+			jsonrpc: '2.0', id: 1, result: { encoding: 'base64', offset: 4, size: 100, eof: false, redacted: 'binary resource range' },
+		});
+		assert.deepStrictEqual(JSON.parse(stringifyAhpLogEntry(request)), {
+			jsonrpc: '2.0', id: 1, method: 'vscode/resourceReadRange', params: { redacted: 'bounded file read' },
+		});
+		assert.strictEqual(response.result.data, 'private-video-bytes');
+		assert.strictEqual(request.params.expectedEtag, 'private-version');
 	});
 
 	test('writes canonical JSON-RPC JSONL with metadata at the root', async () => {

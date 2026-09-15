@@ -23,7 +23,7 @@ import { CommandService } from '../../../../../workbench/services/commands/commo
 import { IExtensionService } from '../../../../../workbench/services/extensions/common/extensions.js';
 import { IChatWidgetService } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import { ComponentFixtureContext, createEditorServices, defineComponentFixture, defineThemedFixtureGroup, registerWorkbenchServices } from '../../../../../workbench/test/browser/componentFixtures/fixtureUtils.js';
-import { IComputerUseRecordingPreview, IComputerUseRecordingTimelineRange, IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoConfig, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
+import { IComputerUseRecordingActionEvent, IComputerUseRecordingPreview, IComputerUseRecordingTimelineRange, IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoConfig, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
 import '../../browser/computerUseActions.js';
 import { ComputerUseEditorInput } from '../../browser/computerUseEditorInput.js';
 import { ComputerUsePlayer } from '../../browser/computerUsePlayer.js';
@@ -113,9 +113,10 @@ class FixtureVideoSource extends Disposable implements ISessionComputerUseVideoS
 		const latest = Math.max(1, Math.floor((this.now() - this.started) / (1000 / 30)) + 1);
 		const first = cursor ? Math.max(cursor.after + 1, latest - 2) : latest;
 		const frames: IComputerUseVideoFrame[] = [];
+		const recordingTimestampOffset = this.mode === 'recording' ? 24_000_000 : 0;
 		for (let sequence = first; sequence <= latest; sequence++) {
 			frames.push({
-				sequence, timestamp: Math.round(sequence * 1_000_000 / 30), duration: 33333,
+				sequence, timestamp: recordingTimestampOffset + Math.round(sequence * 1_000_000 / 30), duration: 33333,
 				keyFrame: true, data: this.encoded.data,
 				...(this.tracking ? { focus: { x: 443 / 640, y: 266 / 360 } } : {}),
 			});
@@ -135,6 +136,16 @@ class FixtureVideoSource extends Disposable implements ISessionComputerUseVideoS
 			{ startMs: 8000, durationMs: 9000 },
 			{ startMs: 28_000, durationMs: 14_000 },
 			{ startMs: 50_000, durationMs: 5000 },
+		];
+	}
+
+	async readRecordingActions(): Promise<readonly IComputerUseRecordingActionEvent[]> {
+		return [
+			{ timeMs: 4500, kind: 'click' },
+			{ timeMs: 13_000, kind: 'text' },
+			{ timeMs: 22_000, kind: 'key' },
+			{ timeMs: 35_000, kind: 'scroll' },
+			{ timeMs: 47_000, kind: 'drag' },
 		];
 	}
 
@@ -327,7 +338,7 @@ async function renderPlayer({ container, disposableStore, theme }: ComponentFixt
 		}),
 	));
 	const player = disposableStore.add(instantiationService.createInstance(ComputerUsePlayer, container, input, {
-		...(state === 'synchronizing' ? { decoderFactory: createImmediateFixtureDecoderFactory() } : {}),
+		...(state === 'synchronizing' || state === 'recording' ? { decoderFactory: createImmediateFixtureDecoderFactory() } : {}),
 		isDocumentVisible: () => true,
 		scheduler: createFixtureScheduler(container),
 	}));

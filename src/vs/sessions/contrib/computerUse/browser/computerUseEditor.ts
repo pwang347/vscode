@@ -64,6 +64,10 @@ export class ComputerUseEditor extends EditorPane {
 		return this.player.value;
 	}
 
+	restartRecordingPlayback(): void {
+		this.player.value?.restartRecordingPlayback();
+	}
+
 	override focus(): void {
 		this.player.value?.focus();
 	}

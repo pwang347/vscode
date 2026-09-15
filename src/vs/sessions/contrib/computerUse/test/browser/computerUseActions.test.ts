@@ -230,7 +230,7 @@ suite('ViewComputerUseAction', () => {
 		assert.deepStrictEqual(controls, [...ids].sort());
 	});
 
-	test('opens a validated recording and reuses its exact editor', async () => {
+	test('opens a validated recording and restarts its reused editor from the beginning', async () => {
 		const fileService = store.add(new FileService(new NullLogService()));
 		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
 		const root = URI.from({ scheme: Schemas.inMemory, path: '/recording' });
@@ -283,12 +283,17 @@ suite('ViewComputerUseAction', () => {
 		const attachmentChatResource = URI.parse('test-chat://host-a/chat-a');
 		await openComputerUseRecording(manifest, editorService, fileService, 'Entered text in TextEdit', undefined, attachmentChatResource);
 		const source = inputs[0].source as ComputerUseRecordingSource;
-		const firstBatch = await source.read(undefined, CancellationToken.None);
-		await source.read({ streamId: firstBatch.streamId!, after: firstBatch.frames!.at(-1)!.sequence }, CancellationToken.None);
+		await source.read(undefined, CancellationToken.None);
+		source.seek(20);
+		const beforeReplay = {
+			ended: source.playbackEnded,
+			positionMs: source.recordingPositionMs.get(),
+		};
 		await openComputerUseRecording(manifest, editorService, fileService, 'Entered text in TextEdit');
 		const replayed = await source.read(undefined, CancellationToken.None);
 
 		assert.deepStrictEqual({
+			beforeReplay,
 			inputs: inputs.length,
 			openCalls,
 			kind: inputs[0].source.kind,
@@ -296,6 +301,10 @@ suite('ViewComputerUseAction', () => {
 			attachmentChatResource: inputs[0].attachmentChatResource?.toString(),
 			replayed: replayed.frames?.map(frame => frame.sequence),
 		}, {
+			beforeReplay: {
+				ended: false,
+				positionMs: 20,
+			},
 			inputs: 1,
 			openCalls: 2,
 			kind: 'recording',

@@ -217,7 +217,7 @@ suite('Computer Use Recording Store', () => {
 		});
 	});
 
-	test('persists bounded thoughts and trims them with retained segments', async () => {
+	test('persists bounded metadata and trims it with retained segments', async () => {
 		const root = URI.file(await fs.mkdtemp(join(tmpdir(), 'vscode-computer-use-thoughts-')));
 		temporaryRoots.push(root.fsPath);
 		const store = await ComputerUseRecordingStore.create(root, 'thoughts', '2026-09-14T20:00:00.000Z', {
@@ -252,19 +252,26 @@ suite('Computer Use Recording Store', () => {
 				text: `Thought ${sequence}`,
 				streaming: sequence !== 4,
 			});
+			store.recordAction({ timeMs: (sequence - 1) * 40, kind: sequence === 4 ? 'text' : 'click' });
 		}
 		store.recordThought({ timeMs: 150, source: 'activity', text: 'Finished', streaming: false });
+		store.recordAction({ timeMs: 150, kind: 'key' });
 		const result = await store.finalize();
 		assert.ok(result);
 
 		assert.deepStrictEqual({
 			segments: result.manifest.segments.map(segment => ({ startTimeMs: segment.startTimeMs, durationMs: segment.durationMs })),
 			thoughts: result.manifest.thoughts,
+			actions: result.manifest.actions,
 		}, {
 			segments: [{ startTimeMs: 120, durationMs: 40 }],
 			thoughts: [
 				{ timeMs: 120, source: 'activity', text: 'Thought 4', streaming: false },
 				{ timeMs: 150, source: 'activity', text: 'Finished', streaming: false },
+			],
+			actions: [
+				{ timeMs: 120, kind: 'text' },
+				{ timeMs: 150, kind: 'key' },
 			],
 		});
 	});

@@ -113,7 +113,7 @@ suite('ChatSystemNotificationContentPart', () => {
 			content: new MarkdownString('Entered text in TextEdit'),
 			icon: Codicon.playCircle,
 			presentation: 'computerUseRecording' as const,
-			accessibilityLabel: 'Entered text in TextEdit. Computer Use video recording, 0:04.',
+			accessibilityLabel: 'Entered text in TextEdit. Play the Computer Use video recording from the beginning, 0:04.',
 			computerUseRecording: {
 				title: 'Entered text in TextEdit',
 				durationMs: 4000,
@@ -121,7 +121,7 @@ suite('ChatSystemNotificationContentPart', () => {
 				recordingUri,
 				command: {
 					id: 'sessions.openComputerUseRecording',
-					title: 'Play Entered text in TextEdit',
+					title: 'Play Entered text in TextEdit from the Beginning',
 					arguments: [recordingUri.toString(), 'Entered text in TextEdit'],
 				},
 			},
@@ -136,6 +136,16 @@ suite('ChatSystemNotificationContentPart', () => {
 		));
 		const button = part.domNode.querySelector<HTMLElement>('.chat-computer-use-recording-button');
 		assert.ok(button);
+		part.domNode.style.setProperty('--vscode-foreground', 'rgb(200, 200, 200)');
+		part.domNode.style.setProperty('--vscode-editor-background', 'rgb(20, 20, 20)');
+		part.domNode.style.setProperty('--vscode-editorWidget-background', 'rgb(30, 30, 30)');
+		part.domNode.style.setProperty('--vscode-list-hoverBackground', 'rgb(40, 40, 40)');
+		part.domNode.style.setProperty('--vscode-widget-border', 'rgb(0, 0, 255)');
+		part.domNode.style.setProperty('--vscode-button-background', 'rgb(0, 0, 255)');
+		part.domNode.style.setProperty('--vscode-badge-background', 'rgb(0, 0, 255)');
+		const buttonStyle = mainWindow.getComputedStyle(button);
+		const playStyle = mainWindow.getComputedStyle(part.domNode.querySelector<HTMLElement>('.chat-computer-use-recording-play')!);
+		const durationStyle = mainWindow.getComputedStyle(part.domNode.querySelector<HTMLElement>('.chat-computer-use-recording-duration')!);
 		button.click();
 		await Promise.resolve();
 
@@ -147,6 +157,10 @@ suite('ChatSystemNotificationContentPart', () => {
 			ariaLabel: button.getAttribute('aria-label'),
 			inlineTiming: !!part.inlineTimingContainer,
 			hover: hoverService.content,
+			neutralChrome: {
+				legacyBlueUsed: [buttonStyle.borderColor, playStyle.backgroundColor, durationStyle.backgroundColor].includes('rgb(0, 0, 255)'),
+				playMatchesDuration: playStyle.backgroundColor === durationStyle.backgroundColor,
+			},
 			commands,
 			sameContent: part.hasSameContent(notification),
 		}, {
@@ -154,9 +168,13 @@ suite('ChatSystemNotificationContentPart', () => {
 			kind: 'Computer Use recording',
 			duration: '0:04',
 			hasPlay: true,
-			ariaLabel: 'Entered text in TextEdit. Computer Use video recording, 0:04.',
+			ariaLabel: 'Entered text in TextEdit. Play the Computer Use video recording from the beginning, 0:04.',
 			inlineTiming: false,
 			hover: 'Entered text in TextEdit',
+			neutralChrome: {
+				legacyBlueUsed: false,
+				playMatchesDuration: true,
+			},
 			commands: [{
 				id: 'sessions.openComputerUseRecording',
 				args: [recordingUri.toString(), 'Entered text in TextEdit', chatResource.toString()],

@@ -13,7 +13,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { type IFileContent, IFileService } from '../../../../platform/files/common/files.js';
 import { COMPUTER_USE_RECORDING_MAX_MANIFEST_BYTES, COMPUTER_USE_RECORDING_MAX_SEGMENT_HEADER_BYTES, COMPUTER_USE_RECORDING_SEGMENT_HEADER_LENGTH_BYTES, parseComputerUseRecordingManifestJson, parseComputerUseRecordingSegment, parseComputerUseRecordingSegmentHeader, type IComputerUseRecordingManifest, type IComputerUseRecordingSegmentHeader, type IParsedComputerUseRecordingSegment } from '../../../../platform/agentHost/common/computerUseRecording.js';
-import { IComputerUseRecordingPreview, IComputerUseRecordingTimelineRange, IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../services/sessions/common/computerUse.js';
+import { IComputerUseRecordingActionEvent, IComputerUseRecordingPreview, IComputerUseRecordingTimelineRange, IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../services/sessions/common/computerUse.js';
 
 const PLAYBACK_BUFFER_MS = 250;
 const PAUSE_DETECTION_MS = 100;
@@ -209,6 +209,16 @@ export class ComputerUseRecordingSource extends Disposable implements ISessionCo
 		}
 		this.timelineRanges = ranges;
 		return ranges;
+	}
+
+	async readRecordingActions(token: CancellationToken): Promise<readonly IComputerUseRecordingActionEvent[]> {
+		if (token.isCancellationRequested) {
+			throw new CancellationError();
+		}
+		return (this.info.manifest.actions ?? []).map(action => ({
+			timeMs: Math.min(this.recordingDurationMs, Math.max(0, action.timeMs - this.firstSegmentStartMs)),
+			kind: action.kind,
+		}));
 	}
 
 	async readRecordingPreview(positionMs: number, token: CancellationToken): Promise<IComputerUseRecordingPreview | undefined> {

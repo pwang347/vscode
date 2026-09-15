@@ -87,6 +87,7 @@ export class ComputerUsePlayer extends Disposable {
 	private readonly playbackFeedback: HTMLElement;
 	private readonly playbackFeedbackIcon: HTMLElement;
 	private readonly actionError: HTMLElement;
+	private readonly controlRow: HTMLElement;
 	private readonly toolbarContainer: HTMLElement;
 	private toolbar: MenuWorkbenchToolBar | undefined;
 	private readonly scheduler: IComputerUseVideoScheduler;
@@ -100,6 +101,7 @@ export class ComputerUsePlayer extends Disposable {
 	private statusIconBusy = false;
 	private visible = false;
 	private disposed = false;
+	private controlsPointerInside = false;
 	private previousFullScreenFocus: HTMLElement | undefined;
 
 	constructor(
@@ -181,7 +183,19 @@ export class ComputerUsePlayer extends Disposable {
 		this.statusLabel = dom.append(stage, dom.$('.computer-use-status', { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }));
 		this.statusIcon = dom.append(this.statusLabel, dom.$('span.computer-use-status-icon', { 'aria-hidden': 'true' }));
 		this.statusText = dom.append(this.statusLabel, dom.$('span.computer-use-status-text'));
-		const controlRow = dom.append(stage, dom.$('.computer-use-controls'));
+		const controlRow = this.controlRow = dom.append(stage, dom.$('.computer-use-controls'));
+		const recordingPosition = input.source.recordingPositionMs;
+		const recordingDuration = input.source.recordingDurationMs;
+		if (input.source.kind === 'recording' && recordingPosition && recordingDuration !== undefined && input.source.seek) {
+			this.recordingTimeline = this._register(new ComputerUseRecordingTimeline(
+				controlRow,
+				input.source,
+				recordingDuration,
+				decoderFactory,
+				this.scheduler,
+				positionMs => this.video.seek(positionMs),
+			));
+		}
 		const toolbarContainer = this.toolbarContainer = dom.append(controlRow, dom.$('.computer-use-toolbar'));
 		const toolbar = this.toolbar = this._register(scopedInstantiationService.createInstance(MenuWorkbenchToolBar, toolbarContainer, Menus.ComputerUsePlayer, {
 			hiddenItemStrategy: HiddenItemStrategy.Ignore,
@@ -197,18 +211,6 @@ export class ComputerUsePlayer extends Disposable {
 			},
 		}));
 		toolbar.context = this;
-		const recordingPosition = input.source.recordingPositionMs;
-		const recordingDuration = input.source.recordingDurationMs;
-		if (input.source.kind === 'recording' && recordingPosition && recordingDuration !== undefined && input.source.seek) {
-			this.recordingTimeline = this._register(new ComputerUseRecordingTimeline(
-				this.domNode,
-				input.source,
-				recordingDuration,
-				decoderFactory,
-				this.scheduler,
-				positionMs => this.video.seek(positionMs),
-			));
-		}
 		const followStatus = dom.append(this.domNode, dom.$('.computer-use-follow-status', { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }));
 		const footer = dom.append(this.domNode, dom.$('.computer-use-footer'));
 		this.actionError = dom.append(footer, dom.$('.computer-use-action-error', { role: 'alert' }));
@@ -278,11 +280,21 @@ export class ComputerUsePlayer extends Disposable {
 		this._register(dom.addDisposableListener(stage, dom.EventType.POINTER_MOVE, () => this.revealControls()));
 		this._register(dom.addDisposableListener(stage, dom.EventType.POINTER_DOWN, () => this.revealControls()));
 		this._register(dom.addDisposableListener(stage, dom.EventType.POINTER_LEAVE, () => this.hideControls()));
-		this._register(dom.addDisposableListener(toolbarContainer, dom.EventType.MOUSE_ENTER, () => {
+		this._register(dom.addDisposableListener(controlRow, dom.EventType.MOUSE_ENTER, () => {
+			this.controlsPointerInside = true;
 			this.controlsIdle.clear();
 			this.domNode.classList.add('is-controls-visible');
 		}));
-		this._register(dom.addDisposableListener(toolbarContainer, dom.EventType.MOUSE_LEAVE, () => this.revealControls()));
+		this._register(dom.addDisposableListener(controlRow, dom.EventType.MOUSE_LEAVE, () => {
+			this.controlsPointerInside = false;
+			this.revealControls();
+		}));
+		const controlsFocusTracker = this._register(dom.trackFocus(controlRow));
+		this._register(controlsFocusTracker.onDidFocus(() => {
+			this.controlsIdle.clear();
+			this.domNode.classList.add('is-controls-visible');
+		}));
+		this._register(controlsFocusTracker.onDidBlur(() => this.revealControls()));
 
 		this._register(autorun(reader => {
 			const sessionTitle = input.sessionTitle.read(reader);
@@ -319,7 +331,7 @@ export class ComputerUsePlayer extends Disposable {
 			this.domNode.classList.toggle('is-paused', state.status === 'paused' || manuallyPaused);
 			this.domNode.classList.toggle('has-action-error', !!error);
 			this.updateVisualStatus(state, manuallyPaused, stop);
-			if (state.status === 'live') {
+			if (this.shouldAutoHideControls()) {
 				this.revealControls();
 			} else {
 				this.controlsIdle.clear();
@@ -489,10 +501,10 @@ export class ComputerUsePlayer extends Disposable {
 	private revealControls(): void {
 		this.controlsIdle.clear();
 		this.domNode.classList.add('is-controls-visible');
-		if (this.visible && this.video.state.get().status === 'live') {
+		if (this.visible && this.shouldAutoHideControls()) {
 			this.controlsIdle.value = this.scheduler.schedule(() => {
 				this.controlsIdle.clear();
-				if (this.video.state.get().status === 'live') {
+				if (this.shouldAutoHideControls() && !this.controlsPointerInside && !this.controlRow.contains(this.playerRoot.activeElement)) {
 					this.domNode.classList.remove('is-controls-visible');
 				}
 			}, CONTROLS_IDLE_HIDE_DELAY_MS);
@@ -501,9 +513,15 @@ export class ComputerUsePlayer extends Disposable {
 
 	private hideControls(): void {
 		this.controlsIdle.clear();
-		if (this.video.state.get().status === 'live') {
+		if (this.shouldAutoHideControls() && !this.controlRow.contains(this.playerRoot.activeElement)) {
 			this.domNode.classList.remove('is-controls-visible');
 		}
+	}
+
+	private shouldAutoHideControls(): boolean {
+		return this.domNode.classList.contains('has-frame')
+			&& !this.annotationCanvas.isActive
+			&& (this.input.source.kind === 'recording' || this.video.state.get().status === 'live');
 	}
 
 	pauseViewing(): void {
@@ -626,6 +644,7 @@ export class ComputerUsePlayer extends Disposable {
 		if (shouldResume) {
 			this.video.resume();
 		}
+		this.revealControls();
 		if (announce) {
 			this.focus();
 			status(localize('computerUse.annotationEnded', "Returned to video."));
@@ -675,6 +694,12 @@ export class ComputerUsePlayer extends Disposable {
 	}
 
 	stopAgent(): Promise<void> { return this.video.stopAgent(); }
+
+	restartRecordingPlayback(): void {
+		if (this.input.source.kind === 'recording') {
+			this.video.seek(0);
+		}
+	}
 
 	private get playerRoot(): Document | ShadowRoot {
 		return dom.getShadowRoot(this.domNode) ?? this.domNode.ownerDocument;

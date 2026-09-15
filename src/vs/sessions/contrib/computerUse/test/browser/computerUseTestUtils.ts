@@ -7,7 +7,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Disposable, IDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import { IComputerUseRecordingPreview, IComputerUseRecordingTimelineRange, IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoConfig, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
+import { IComputerUseRecordingActionEvent, IComputerUseRecordingPreview, IComputerUseRecordingTimelineRange, IComputerUseSharedThought, IComputerUseVideoBatch, IComputerUseVideoConfig, IComputerUseVideoCursor, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../../services/sessions/common/computerUse.js';
 import { IComputerUseDecodedFrame, IComputerUseVideoDecoder, IComputerUseVideoDecoderFactory, IComputerUseVideoScheduler } from '../../browser/computerUseVideo.js';
 
 export class TestVideoScheduler implements IComputerUseVideoScheduler {
@@ -77,6 +77,7 @@ export class TestVideoSource extends Disposable implements ISessionComputerUseVi
 	readonly recordingDurationMs?: number;
 	readonly recordingPositionMs = observableValue(this, 0);
 	readonly recordingTimeline: IComputerUseRecordingTimelineRange[] = [];
+	readonly recordingActions: IComputerUseRecordingActionEvent[] = [];
 	readonly recordingPreviewCalls: number[] = [];
 	readonly recordingPreviewResults: (IComputerUseRecordingPreview | DeferredPromise<IComputerUseRecordingPreview>)[] = [];
 	readonly seekCalls: number[] = [];
@@ -96,6 +97,11 @@ export class TestVideoSource extends Disposable implements ISessionComputerUseVi
 		this.recordingDurationMs = kind === 'recording' ? 4000 : undefined;
 		if (kind === 'recording') {
 			this.recordingTimeline.push({ startMs: 1500, durationMs: 1000 });
+			this.recordingActions.push(
+				{ timeMs: 500, kind: 'click' },
+				{ timeMs: 2000, kind: 'text' },
+				{ timeMs: 3000, kind: 'scroll' },
+			);
 		}
 	}
 
@@ -125,6 +131,10 @@ export class TestVideoSource extends Disposable implements ISessionComputerUseVi
 
 	async readRecordingTimeline(): Promise<readonly IComputerUseRecordingTimelineRange[]> {
 		return this.recordingTimeline;
+	}
+
+	async readRecordingActions(): Promise<readonly IComputerUseRecordingActionEvent[]> {
+		return this.recordingActions;
 	}
 
 	async readRecordingPreview(positionMs: number): Promise<IComputerUseRecordingPreview> {

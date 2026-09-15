@@ -6,7 +6,7 @@
 import * as assert from 'assert';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
-import { COMPUTER_USE_RECORDING_MAX_THOUGHTS, COMPUTER_USE_RECORDING_MAX_THOUGHT_TEXT_LENGTH, COMPUTER_USE_RECORDING_SEGMENT_HEADER_LENGTH_BYTES, parseComputerUseRecordingManifest, parseComputerUseRecordingSegment, parseComputerUseRecordingSegmentHeader, serializeComputerUseRecordingSegment } from '../../common/computerUseRecording.js';
+import { COMPUTER_USE_RECORDING_MAX_ACTIONS, COMPUTER_USE_RECORDING_MAX_THOUGHTS, COMPUTER_USE_RECORDING_MAX_THOUGHT_TEXT_LENGTH, COMPUTER_USE_RECORDING_SEGMENT_HEADER_LENGTH_BYTES, parseComputerUseRecordingManifest, parseComputerUseRecordingSegment, parseComputerUseRecordingSegmentHeader, serializeComputerUseRecordingSegment } from '../../common/computerUseRecording.js';
 
 suite('Computer Use Recording Contract', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -115,6 +115,51 @@ suite('Computer Use Recording Contract', () => {
 			...manifest,
 			thoughts: [{ timeMs: 45, source: 'activity', text: 'Outside playback', streaming: false }],
 		}), /thought timeline/i);
+	});
+
+	test('validates optional categorized actions without accepting tool arguments', () => {
+		const manifest = {
+			version: 1,
+			recordingId: 'recording-actions',
+			createdAt: '2026-09-14T20:00:00.000Z',
+			finalized: true,
+			durationMs: 45,
+			sizeBytes: 10,
+			trimmed: false,
+			segments: [{
+				file: 'segment-000001.gop',
+				startTimeMs: 0,
+				durationMs: 45,
+				sizeBytes: 10,
+				sampleCount: 1,
+			}],
+			gaps: [],
+		} as const;
+		const actions = [
+			{ timeMs: 0, kind: 'click' },
+			{ timeMs: 10, kind: 'text' },
+			{ timeMs: 10, kind: 'key' },
+			{ timeMs: 44, kind: 'scroll' },
+		] as const;
+
+		assert.deepStrictEqual(parseComputerUseRecordingManifest({ ...manifest, actions }), { ...manifest, actions });
+		assert.strictEqual(parseComputerUseRecordingManifest(manifest).actions, undefined);
+		assert.throws(() => parseComputerUseRecordingManifest({
+			...manifest,
+			actions: Array.from({ length: COMPUTER_USE_RECORDING_MAX_ACTIONS + 1 }, (_, timeMs) => ({ timeMs, kind: 'click' })),
+		}), /actions/i);
+		assert.throws(() => parseComputerUseRecordingManifest({
+			...manifest,
+			actions: [{ timeMs: 10, kind: 'click', text: 'secret' }],
+		}), /action fields/i);
+		assert.throws(() => parseComputerUseRecordingManifest({
+			...manifest,
+			actions: [{ timeMs: 20, kind: 'click' }, { timeMs: 19, kind: 'drag' }],
+		}), /action order/i);
+		assert.throws(() => parseComputerUseRecordingManifest({
+			...manifest,
+			actions: [{ timeMs: 46, kind: 'click' }],
+		}), /action timeline/i);
 	});
 
 	test('serializes decoder configuration and AVCC samples as bounded binary payloads', () => {

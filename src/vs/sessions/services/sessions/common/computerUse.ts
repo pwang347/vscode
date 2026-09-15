@@ -35,6 +35,21 @@ export interface IComputerUseRecordingTimelineRange {
 	readonly durationMs: number;
 }
 
+export type ComputerUseRecordingActionKind =
+	| 'click'
+	| 'text'
+	| 'key'
+	| 'scroll'
+	| 'drag'
+	| 'secondary'
+	| 'application';
+
+/** A categorized GUI action at a normalized position in recorded playback. */
+export interface IComputerUseRecordingActionEvent {
+	readonly timeMs: number;
+	readonly kind: ComputerUseRecordingActionKind;
+}
+
 /** A bounded keyframe-started sequence that decodes to one recording preview. */
 export interface IComputerUseRecordingPreview {
 	readonly config: IComputerUseVideoConfig;
@@ -82,6 +97,8 @@ export interface ISessionComputerUseVideoSource extends IDisposable {
 	seek?(positionMs: number): void;
 	/** Reads unchanged-frame ranges without loading encoded video payloads. */
 	readRecordingTimeline?(token: CancellationToken): Promise<readonly IComputerUseRecordingTimelineRange[]>;
+	/** Reads privacy-preserving GUI action markers without loading encoded video payloads. */
+	readRecordingActions?(token: CancellationToken): Promise<readonly IComputerUseRecordingActionEvent[]>;
 	/** Reads a bounded keyframe-started sequence for a timeline preview. */
 	readRecordingPreview?(positionMs: number, token: CancellationToken): Promise<IComputerUseRecordingPreview | undefined>;
 	onFramePresented?(timestampUs: number): void;

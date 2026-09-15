@@ -15,6 +15,7 @@ export const COMPUTER_USE_RECORDING_MAX_SEGMENT_SAMPLES = 4096;
 export const COMPUTER_USE_RECORDING_MAX_SEGMENTS = 65_536;
 export const COMPUTER_USE_RECORDING_MAX_GAPS = 4096;
 export const COMPUTER_USE_RECORDING_MAX_THOUGHTS = 4096;
+export const COMPUTER_USE_RECORDING_MAX_ACTIONS = 4096;
 export const COMPUTER_USE_RECORDING_MAX_THOUGHT_TEXT_LENGTH = 512;
 export const COMPUTER_USE_RECORDING_MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
 export const COMPUTER_USE_RECORDING_MAX_SEGMENT_HEADER_BYTES = 1024 * 1024;
@@ -63,6 +64,21 @@ export interface IComputerUseRecordingThought {
 	readonly source: 'reasoning' | 'activity';
 	readonly text: string;
 	readonly streaming: boolean;
+}
+
+export type ComputerUseRecordingActionKind =
+	| 'click'
+	| 'text'
+	| 'key'
+	| 'scroll'
+	| 'drag'
+	| 'secondary'
+	| 'application';
+
+/** A privacy-preserving GUI action at an absolute position in the recording timeline. */
+export interface IComputerUseRecordingAction {
+	readonly timeMs: number;
+	readonly kind: ComputerUseRecordingActionKind;
 }
 
 export interface IComputerUseRecordingFocus {
@@ -145,6 +161,7 @@ export interface IComputerUseRecordingManifest {
 	readonly segments: readonly IComputerUseRecordingSegmentReference[];
 	readonly gaps: readonly IComputerUseRecordingGap[];
 	readonly thoughts?: readonly IComputerUseRecordingThought[];
+	readonly actions?: readonly IComputerUseRecordingAction[];
 }
 
 function asRecord(value: unknown, name: string): Record<string, unknown> {
@@ -263,6 +280,23 @@ export function parseComputerUseRecordingThought(value: unknown): IComputerUseRe
 		source,
 		text: record.text,
 		streaming: record.streaming,
+	};
+}
+
+/** Validates one categorized action without accepting tool arguments or user content. */
+export function parseComputerUseRecordingAction(value: unknown): IComputerUseRecordingAction {
+	const record = asRecord(value, 'action');
+	if (Object.keys(record).some(key => key !== 'timeMs' && key !== 'kind')) {
+		throw new Error('Invalid Computer Use recording action fields.');
+	}
+	const kind = record.kind;
+	if (kind !== 'click' && kind !== 'text' && kind !== 'key' && kind !== 'scroll'
+		&& kind !== 'drag' && kind !== 'secondary' && kind !== 'application') {
+		throw new Error('Invalid Computer Use recording action kind.');
+	}
+	return {
+		timeMs: readInteger(record, 'timeMs', 0, Number.MAX_SAFE_INTEGER),
+		kind,
 	};
 }
 
@@ -533,16 +567,27 @@ export function parseComputerUseRecordingManifest(value: unknown): IComputerUseR
 	if (record.thoughts !== undefined && (!Array.isArray(record.thoughts) || record.thoughts.length > COMPUTER_USE_RECORDING_MAX_THOUGHTS)) {
 		throw new Error('Invalid Computer Use recording thoughts.');
 	}
+	if (record.actions !== undefined && (!Array.isArray(record.actions) || record.actions.length > COMPUTER_USE_RECORDING_MAX_ACTIONS)) {
+		throw new Error('Invalid Computer Use recording actions.');
+	}
 
 	const segments = record.segments.map(readSegment);
 	const gaps = record.gaps.map(readGap);
 	const thoughts = record.thoughts?.map(parseComputerUseRecordingThought);
+	const actions = record.actions?.map(parseComputerUseRecordingAction);
 	let previousThoughtTime = -1;
 	for (const thought of thoughts ?? []) {
 		if (thought.timeMs < previousThoughtTime) {
 			throw new Error('Invalid Computer Use recording thought order.');
 		}
 		previousThoughtTime = thought.timeMs;
+	}
+	let previousActionTime = -1;
+	for (const action of actions ?? []) {
+		if (action.timeMs < previousActionTime) {
+			throw new Error('Invalid Computer Use recording action order.');
+		}
+		previousActionTime = action.timeMs;
 	}
 	const files = new Set<string>();
 	let previousEnd = -1;
@@ -564,7 +609,7 @@ export function parseComputerUseRecordingManifest(value: unknown): IComputerUseR
 	const declaredDurationMs = readInteger(record, 'durationMs', 0, COMPUTER_USE_RECORDING_MAX_DURATION_MS);
 	const firstStart = segments[0]?.startTimeMs;
 	if (firstStart === undefined) {
-		if (gaps.length !== 0 || thoughts?.length || declaredDurationMs !== 0 || declaredSizeBytes !== 0) {
+		if (gaps.length !== 0 || thoughts?.length || actions?.length || declaredDurationMs !== 0 || declaredSizeBytes !== 0) {
 			throw new Error('Invalid empty Computer Use recording manifest.');
 		}
 	} else {
@@ -591,6 +636,9 @@ export function parseComputerUseRecordingManifest(value: unknown): IComputerUseR
 		if (thoughts?.some(thought => thought.timeMs < firstStart || thought.timeMs > lastEnd)) {
 			throw new Error('Invalid Computer Use recording thought timeline.');
 		}
+		if (actions?.some(action => action.timeMs < firstStart || action.timeMs > lastEnd)) {
+			throw new Error('Invalid Computer Use recording action timeline.');
+		}
 	}
 
 	return {
@@ -604,6 +652,7 @@ export function parseComputerUseRecordingManifest(value: unknown): IComputerUseR
 		segments,
 		gaps,
 		...(thoughts !== undefined ? { thoughts } : {}),
+		...(actions !== undefined ? { actions } : {}),
 	};
 }
 

@@ -116,8 +116,10 @@ suite('Computer Use Turn Recorder', () => {
 
 		recorder.start();
 		recorder.recordThought({ source: 'reasoning', text: 'Inspecting', streaming: true });
+		recorder.recordAction('click');
 		await scheduler.advanceTo(50);
 		recorder.recordThought({ source: 'reasoning', text: 'Inspecting the page.', streaming: false });
+		recorder.recordAction('text');
 		await scheduler.advanceTo(200);
 		const result = await recorder.stop();
 		assert.ok(result);
@@ -131,6 +133,7 @@ suite('Computer Use Turn Recorder', () => {
 			segments: result.manifest.segments.map(segment => ({ startTimeMs: segment.startTimeMs, sampleCount: segment.sampleCount })),
 			gaps: result.manifest.gaps,
 			thoughts: result.manifest.thoughts,
+			actions: result.manifest.actions,
 			firstSequences,
 		}, {
 			calls: [
@@ -150,6 +153,10 @@ suite('Computer Use Turn Recorder', () => {
 			thoughts: [
 				{ timeMs: 0, source: 'reasoning', text: 'Inspecting', streaming: true },
 				{ timeMs: 50, source: 'reasoning', text: 'Inspecting the page.', streaming: false },
+			],
+			actions: [
+				{ timeMs: 0, kind: 'click' },
+				{ timeMs: 50, kind: 'text' },
 			],
 			firstSequences: [1, 4],
 		});

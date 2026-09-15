@@ -13,7 +13,9 @@ import { InMemoryFileSystemProvider } from '../../../../../platform/files/common
 import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { serializeComputerUseRecordingSegment } from '../../../../../platform/agentHost/common/computerUseRecording.js';
 import { ComputerUseRecordingSource } from '../../browser/computerUseRecordingSource.js';
+import { ComputerUseVideo } from '../../browser/computerUseVideo.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { TestVideoDecoderFactory, TestVideoScheduler } from './computerUseTestUtils.js';
 
 suite('ComputerUseRecordingSource', () => {
 	const store = ensureNoDisposablesAreLeakedInTestSuite();
@@ -185,6 +187,107 @@ suite('ComputerUseRecordingSource', () => {
 		});
 	});
 
+	test('seeking through a long GOP reaches the requested frames', async () => {
+		const fileService = store.add(new FileService(new NullLogService()));
+		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
+		const root = URI.from({ scheme: Schemas.inMemory, path: '/long-gop-recording' });
+		await fileService.createFolder(root);
+		const frameDurationUs = 33_333;
+		const samples = Array.from({ length: 100 }, (_, index) => ({
+			sequence: index + 1,
+			timestampUs: index * frameDurationUs,
+			durationUs: frameDurationUs,
+			keyFrame: index === 0,
+			frameCount: 1,
+			data: Uint8Array.of(index),
+		}));
+		const segment = serializeComputerUseRecordingSegment({
+			streamId: 'stream',
+			target: { app: 'Notepad', windowId: 7, title: 'Untitled - Notepad' },
+			config: {
+				codec: 'avc1.64001f',
+				codedWidth: 1280,
+				codedHeight: 720,
+				description: Uint8Array.of(1, 2, 3, 4),
+			},
+			samples,
+		});
+		await fileService.writeFile(URI.joinPath(root, 'segment-000001.gop'), VSBuffer.wrap(segment));
+		const manifestUri = URI.joinPath(root, 'manifest.json');
+		const durationMs = Math.ceil(samples.at(-1)!.timestampUs / 1000 + frameDurationUs / 1000);
+		await fileService.writeFile(manifestUri, VSBuffer.fromString(JSON.stringify({
+			version: 1,
+			recordingId: 'recording-long-gop',
+			createdAt: '2026-09-15T20:00:00.000Z',
+			finalized: true,
+			durationMs,
+			sizeBytes: segment.byteLength,
+			trimmed: false,
+			segments: [{ file: 'segment-000001.gop', startTimeMs: 0, durationMs, sizeBytes: segment.byteLength, sampleCount: samples.length }],
+			gaps: [],
+		})));
+		let now = 0;
+		const source = store.add(await ComputerUseRecordingSource.create(manifestUri, fileService, () => now));
+		source.seek(3000);
+		const first = await source.read(undefined, CancellationToken.None);
+		now = 50;
+		const second = await source.read({ streamId: first.streamId!, after: first.frames!.at(-1)!.sequence }, CancellationToken.None);
+		const scheduler = new TestVideoScheduler();
+		const playbackSource = store.add(await ComputerUseRecordingSource.create(manifestUri, fileService, () => scheduler.now()));
+		playbackSource.seek(3000);
+		const rendered: number[] = [];
+		const decoderFactory = new TestVideoDecoderFactory();
+		const video = store.add(new ComputerUseVideo(playbackSource, decoderFactory, scheduler, {
+			render: frame => rendered.push(frame.timestamp),
+			clear: () => { },
+		}));
+		video.setVisible(true);
+		await scheduler.advance(0);
+		await scheduler.advance(1000);
+
+		assert.deepStrictEqual({
+			first: {
+				length: first.frames?.length,
+				first: first.frames?.[0] && { sequence: first.frames[0].sequence, keyFrame: first.frames[0].keyFrame },
+				last: first.frames?.at(-1)?.sequence,
+			},
+			second: {
+				length: second.frames?.length,
+				first: second.frames?.[0] && { sequence: second.frames[0].sequence, keyFrame: second.frames[0].keyFrame },
+			},
+			playback: {
+				status: video.state.get().status,
+				phase: video.state.get().phase,
+				message: video.state.get().message,
+				retainedFrame: video.state.get().retainedFrame,
+				lastRendered: rendered.at(-1),
+				position: playbackSource.recordingPositionMs.get(),
+				decoders: decoderFactory.decoders.length,
+				submitted: decoderFactory.decoders.map(decoder => decoder.sequences.length),
+			},
+		}, {
+			first: {
+				length: 98,
+				first: { sequence: 1, keyFrame: true },
+				last: 98,
+			},
+			second: {
+				length: 2,
+				first: { sequence: 99, keyFrame: false },
+			},
+			playback: {
+				status: 'idle',
+				phase: undefined,
+				message: 'Recording ended. Showing the last frame.',
+				retainedFrame: true,
+				lastRendered: 3_299_967,
+				position: durationMs,
+				decoders: 1,
+				submitted: [100],
+			},
+		});
+	});
+
 	test('reads hover previews and unchanged ranges from existing segment metadata', async () => {
 		const fileService = store.add(new FileService(new NullLogService()));
 		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
@@ -227,13 +330,20 @@ suite('ComputerUseRecordingSource', () => {
 			trimmed: false,
 			segments: [{ file: 'segment-000001.gop', startTimeMs: 1000, durationMs: 400, sizeBytes: segment.byteLength, sampleCount: 2 }],
 			gaps: [],
+			actions: [
+				{ timeMs: 1050, kind: 'click' },
+				{ timeMs: 1300, kind: 'text' },
+				{ timeMs: 1390, kind: 'scroll' },
+			],
 		})));
 		const source = store.add(await ComputerUseRecordingSource.create(manifestUri, fileService));
 		const ranges = await source.readRecordingTimeline(CancellationToken.None);
+		const actions = await source.readRecordingActions(CancellationToken.None);
 		const preview = await source.readRecordingPreview(350, CancellationToken.None);
 
 		assert.deepStrictEqual({
 			ranges,
+			actions,
 			preview: preview && {
 				config: preview.config,
 				frames: preview.frames.map(frame => ({
@@ -246,6 +356,11 @@ suite('ComputerUseRecordingSource', () => {
 			},
 		}, {
 			ranges: [{ startMs: 200, durationMs: 200 }],
+			actions: [
+				{ timeMs: 50, kind: 'click' },
+				{ timeMs: 300, kind: 'text' },
+				{ timeMs: 390, kind: 'scroll' },
+			],
 			preview: {
 				config: {
 					codec: 'avc1.64001f',

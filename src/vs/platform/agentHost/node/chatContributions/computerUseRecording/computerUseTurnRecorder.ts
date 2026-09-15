@@ -5,7 +5,7 @@
 
 import { disposableTimeout } from '../../../../../base/common/async.js';
 import { Disposable, type IDisposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
-import type { ComputerUseRecordingGapReason, IComputerUseRecordingThought } from '../../../common/computerUseRecording.js';
+import type { ComputerUseRecordingActionKind, ComputerUseRecordingGapReason, IComputerUseRecordingThought } from '../../../common/computerUseRecording.js';
 import { type ComputerUseRecordingStore, type IComputerUseRecordingFinalization } from './computerUseRecordingStore.js';
 import { COMPUTER_USE_VIDEO_RESOURCE, type IComputerUseVideoBatch, type IComputerUseVideoCursor, parseComputerUseVideoResource } from './computerUseVideoResource.js';
 
@@ -53,6 +53,7 @@ export class ComputerUseTurnRecorder extends Disposable {
 	private _started = false;
 	private _startedAt: number | undefined;
 	private _lastThoughtTimeMs = 0;
+	private _lastActionTimeMs = 0;
 	private _stopping = false;
 	private _nextPollAt = 0;
 	private _pollPromise: Promise<void> | undefined;
@@ -92,6 +93,15 @@ export class ComputerUseTurnRecorder extends Disposable {
 		const timeMs = Math.max(this._lastThoughtTimeMs, Math.round(this._options.scheduler.now() - this._startedAt));
 		this._recordingStore.recordThought({ timeMs, ...thought });
 		this._lastThoughtTimeMs = timeMs;
+	}
+
+	recordAction(kind: ComputerUseRecordingActionKind, occurredAt = this._options.scheduler.now()): void {
+		if (this._startedAt === undefined || this._stopping) {
+			return;
+		}
+		const timeMs = Math.max(this._lastActionTimeMs, Math.round(occurredAt - this._startedAt));
+		this._recordingStore.recordAction({ timeMs, kind });
+		this._lastActionTimeMs = timeMs;
 	}
 
 	stop(): Promise<IComputerUseRecordingFinalization | undefined> {

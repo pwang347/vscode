@@ -10,6 +10,7 @@ import { joinPath } from '../../../base/common/resources.js';
 import { isUriComponents, URI, UriComponents } from '../../../base/common/uri.js';
 import { IFileService, IFileStatWithMetadata } from '../../files/common/files.js';
 import { ILogService } from '../../log/common/log.js';
+import { ResourceReadRangeExtensionMethod } from './agentHostResourceReadRange.js';
 
 export type AhpLogDirection = 'c2s' | 's2c';
 
@@ -242,6 +243,15 @@ function stringifyAhpLogEntryTruncated(value: unknown, maxStringLength: number):
  */
 function _ahpReplacer(this: unknown, _key: string, value: unknown): unknown {
 	if (value && typeof value === 'object') {
+		const range = value as { encoding?: unknown; data?: unknown; offset?: unknown; size?: unknown; etag?: unknown; eof?: unknown };
+		if (range.encoding === 'base64' && typeof range.data === 'string' && typeof range.offset === 'number'
+			&& typeof range.size === 'number' && typeof range.etag === 'string' && typeof range.eof === 'boolean') {
+			return { encoding: 'base64', offset: range.offset, size: range.size, eof: range.eof, redacted: 'binary resource range' };
+		}
+		const request = value as Record<string, unknown>;
+		if (request.method === ResourceReadRangeExtensionMethod) {
+			return { ...request, params: { redacted: 'bounded file read' } };
+		}
 		const resource = value as { uri?: string; text?: string; blob?: string };
 		if (typeof resource.uri === 'string' && /^computer-use:\/\/video\/live(?:\?|$)/.test(resource.uri)
 			&& (typeof resource.text === 'string' || typeof resource.blob === 'string')) {

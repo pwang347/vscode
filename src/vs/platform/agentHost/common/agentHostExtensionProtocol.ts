@@ -7,6 +7,7 @@ import { vEnum, vObj, vOptionalProp, vString, type ValidatorType } from '../../.
 import type { AgentHostDebugLogsArtifactKind, IAgentHostManagedSettingsDiagnostics, IAgentHostNetworkDiagnosticsInfo, IAgentHostNetworkFetchResult } from './agentService.js';
 import type { InitializeResult } from './state/protocol/common/commands.js';
 import { AgentHostArtifactRemovalCapabilityMetaKey } from './meta/agentHostArtifactRemovalMeta.js';
+import { AGENT_HOST_RESOURCE_RANGE_MAX_BYTES, ResourceReadRangeCapabilityMetaKey, ResourceReadRangeExtensionMethod, type IAgentHostResourceReadRangeParams, type IAgentHostResourceReadRangeResult } from './agentHostResourceReadRange.js';
 
 export { supportsAgentHostArtifactRemoval } from './meta/agentHostArtifactRemovalMeta.js';
 
@@ -28,17 +29,19 @@ export interface IAgentHostExtensionInitializeResultMeta extends Record<string, 
 	readonly [AgentHostChatStateFileCapabilityMetaKey]?: true;
 	readonly [AgentHostDetachedWorktreeCapabilityMetaKey]?: true;
 	readonly [AgentHostArtifactRemovalCapabilityMetaKey]?: true;
+	readonly [ResourceReadRangeCapabilityMetaKey]?: { readonly version: 1; readonly maxBytes: number };
 }
 
 export interface IAgentHostExtensionInitializeResult extends InitializeResult {
 	readonly _meta?: IAgentHostExtensionInitializeResultMeta;
 }
 
-export function getAgentHostExtensionInitializeResultMeta(artifactRemoval = true): IAgentHostExtensionInitializeResultMeta {
+export function getAgentHostExtensionInitializeResultMeta(artifactRemoval = true, resourceReadRange = false): IAgentHostExtensionInitializeResultMeta {
 	return {
 		[AgentHostChatStateFileCapabilityMetaKey]: true,
 		[AgentHostDetachedWorktreeCapabilityMetaKey]: true,
 		[AgentHostArtifactRemovalCapabilityMetaKey]: artifactRemoval ? true : undefined,
+		...(resourceReadRange ? { [ResourceReadRangeCapabilityMetaKey]: { version: 1 as const, maxBytes: AGENT_HOST_RESOURCE_RANGE_MAX_BYTES } } : {}),
 	};
 }
 
@@ -66,6 +69,10 @@ export const removeSessionArtifactParamsValidator = vObj({
 });
 
 export interface IAgentHostExtensionCommandMap {
+	[ResourceReadRangeExtensionMethod]: {
+		params: IAgentHostResourceReadRangeParams;
+		result: IAgentHostResourceReadRangeResult;
+	};
 	[RemoveSessionArtifactExtensionMethod]: {
 		params: ValidatorType<typeof removeSessionArtifactParamsValidator>;
 		result: void;

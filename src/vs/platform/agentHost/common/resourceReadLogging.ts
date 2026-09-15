@@ -6,9 +6,10 @@
 import { Schemas } from '../../../base/common/network.js';
 import { hasKey } from '../../../base/common/types.js';
 import { URI } from '../../../base/common/uri.js';
+import { ResourceReadRangeExtensionMethod } from './agentHostResourceReadRange.js';
 
 export function isFileResourceRead(method: string, params: unknown): boolean {
-	if (method !== 'resourceRead' || !hasUriParam(params)) {
+	if ((method !== 'resourceRead' && method !== ResourceReadRangeExtensionMethod) || !hasUriParam(params)) {
 		return false;
 	}
 	const uri = params.uri;

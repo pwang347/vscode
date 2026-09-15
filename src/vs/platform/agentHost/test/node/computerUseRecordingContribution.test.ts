@@ -95,13 +95,22 @@ const idleResource = {
 	}],
 };
 
-function ready(turnId: string, mcpServerName = 'computer-use'): StateAction {
+function ready(turnId: string, mcpServerName = 'computer-use', mcpToolName = 'click', toolCallId = `tool-${turnId}`): StateAction {
 	return {
 		type: ActionType.ChatToolCallReady,
 		turnId,
-		toolCallId: `tool-${turnId}`,
+		toolCallId,
 		invocationMessage: 'Use the computer',
-		_meta: { mcpServerName },
+		_meta: { mcpServerName, mcpToolName },
+	};
+}
+
+function completeTool(turnId: string, toolCallId: string, success = true): StateAction {
+	return {
+		type: ActionType.ChatToolCallComplete,
+		turnId,
+		toolCallId,
+		result: { success, pastTenseMessage: success ? 'Completed the action' : 'Could not complete the action' },
 	};
 }
 
@@ -229,6 +238,12 @@ suite('Computer Use Recording Contribution', () => {
 		harness.contributions.didDispatchAction({ channel: chat, session, action: ready('turn-1', 'other-server') });
 		harness.contributions.didDispatchAction({ channel: chat, session, action: ready('turn-1') });
 		harness.contributions.didDispatchAction({ channel: chat, session, action: ready('turn-1') });
+		harness.contributions.didDispatchAction({ channel: chat, session, action: ready('turn-1', 'computer-use', 'type_text', 'type-tool') });
+		harness.contributions.didDispatchAction({ channel: chat, session, action: ready('turn-1', 'computer-use', 'get_window_state', 'observe-tool') });
+		harness.contributions.didDispatchAction({ channel: chat, session, action: completeTool('turn-1', 'tool-turn-1') });
+		harness.contributions.didDispatchAction({ channel: chat, session, action: completeTool('turn-1', 'type-tool') });
+		harness.contributions.didDispatchAction({ channel: chat, session, action: ready('turn-1', 'computer-use', 'drag', 'failed-tool') });
+		harness.contributions.didDispatchAction({ channel: chat, session, action: completeTool('turn-1', 'failed-tool', false) });
 		await waitFor(() => harness.requests.length === 1, 'The recorder did not issue its first host-side read.');
 		harness.stateManager.dispatchServerAction(chat, {
 			type: ActionType.ChatResponsePart,
@@ -283,6 +298,7 @@ suite('Computer Use Recording Contribution', () => {
 					text: thought.text,
 					streaming: thought.streaming,
 				})),
+				actions: manifest.actions?.map(action => action.kind),
 			},
 		}, {
 			requests: [{
@@ -310,6 +326,7 @@ suite('Computer Use Recording Contribution', () => {
 					text: 'The document is empty. I will type now.',
 					streaming: false,
 				}],
+				actions: ['click', 'text'],
 			},
 		});
 	});

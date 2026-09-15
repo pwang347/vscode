@@ -569,8 +569,8 @@ export function systemNotificationToChatPart(content: StringOrMarkdown | undefin
 				icon: Codicon.playCircle,
 				presentation: 'computerUseRecording',
 				accessibilityLabel: meta.trimmed
-					? localize('agentHost.computerUseRecording.accessibleTrimmed', "{0}. Computer Use video recording, last {1}.", title, duration)
-					: localize('agentHost.computerUseRecording.accessible', "{0}. Computer Use video recording, {1}.", title, duration),
+					? localize('agentHost.computerUseRecording.accessibleTrimmed', "{0}. Play from the beginning of the retained Computer Use video recording, last {1}.", title, duration)
+					: localize('agentHost.computerUseRecording.accessible', "{0}. Play the Computer Use video recording from the beginning, {1}.", title, duration),
 				computerUseRecording: {
 					title,
 					durationMs: meta.durationMs,
@@ -578,7 +578,7 @@ export function systemNotificationToChatPart(content: StringOrMarkdown | undefin
 					recordingUri,
 					command: {
 						id: OPEN_COMPUTER_USE_RECORDING_COMMAND_ID,
-						title: localize('agentHost.computerUseRecording.play', "Play {0}", title),
+						title: localize('agentHost.computerUseRecording.play', "Play {0} from the Beginning", title),
 						tooltip: localize('agentHost.computerUseRecording.tooltip', "Open this host-recorded Computer Use session in the Computer Use player."),
 						arguments: [recordingUri.toString(), title],
 					},

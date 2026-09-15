@@ -90,9 +90,6 @@ export class ChatSystemNotificationContentPart extends Disposable implements ICh
 		button.element.ariaLabel = notification.accessibilityLabel ?? recording.command.title;
 		const preview = dom.append(button.element, dom.$('.chat-computer-use-recording-preview'));
 		const canvas = dom.append(preview, dom.$('canvas.chat-computer-use-recording-poster', { 'aria-hidden': 'true' })) as HTMLCanvasElement;
-		const placeholder = dom.append(preview, dom.$('span.chat-computer-use-recording-placeholder'));
-		placeholder.classList.add(...ThemeIcon.asClassNameArray(Codicon.deviceDesktop));
-		placeholder.setAttribute('aria-hidden', 'true');
 		const play = dom.append(preview, dom.$('span.chat-computer-use-recording-play'));
 		const playIcon = dom.append(play, dom.$('span'));
 		playIcon.classList.add(...ThemeIcon.asClassNameArray(Codicon.play));

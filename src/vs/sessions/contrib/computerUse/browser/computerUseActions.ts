@@ -30,6 +30,7 @@ import { ISessionsProvidersService } from '../../../services/sessions/browser/se
 import { IChat, ISession } from '../../../services/sessions/common/session.js';
 import { IActiveSession } from '../../../services/sessions/common/sessionsManagement.js';
 import { ComputerUseAnnotatingContext, ComputerUseAnnotationAttachingContext, ComputerUseAnnotationStyleContext, ComputerUseAnnotationWidthContext, ComputerUseFollowActionContext, ComputerUseFullScreenContext, ComputerUseFullScreenSupportedContext, ComputerUseHasAnnotationsContext, ComputerUseHasFrameContext, ComputerUsePausedContext, ComputerUsePlayerContext } from './computerUseContext.js';
+import { ComputerUseEditor } from './computerUseEditor.js';
 import { ComputerUseEditorInput, IComputerUseViewerIdentity } from './computerUseEditorInput.js';
 import { ComputerUsePlayer } from './computerUsePlayer.js';
 import { createComputerUseActivity } from './computerUseActivity.js';
@@ -105,10 +106,11 @@ export async function openComputerUseRecording(recordingUri: URI, editorService:
 	const existing = editorService.editors.find((input): input is ComputerUseEditorInput => input instanceof ComputerUseEditorInput && input.isFor(identity));
 	if (existing) {
 		existing.setAttachmentChatResource(attachmentChatResource);
-		if (existing.source instanceof ComputerUseRecordingSource && existing.source.playbackEnded) {
-			existing.source.restart();
+		existing.source.seek?.(0);
+		const pane = await editorService.openEditor(existing, { pinned: true, revealIfOpened: true });
+		if (pane instanceof ComputerUseEditor) {
+			pane.restartRecordingPlayback();
 		}
-		await editorService.openEditor(existing, { pinned: true, revealIfOpened: true });
 		return;
 	}
 

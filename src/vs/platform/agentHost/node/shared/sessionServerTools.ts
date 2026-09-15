@@ -160,7 +160,7 @@ export const sessionServerToolDefinitions: IAgentServerToolDefinition[] = [
 	{
 		name: SessionServerToolName.GetCurrentSession,
 		title: 'Get Current Session',
-		description: 'Get metadata and the open link for the session this conversation is running in. Use this to reference the current session (for example before adding a chat to it).',
+		description: 'Get identity metadata and the open link for the session this conversation is running in. Use only when another session-management operation needs this session URI or link, such as adding a chat. Do not use it to inspect available tools, application state, shell activity, subagent or task progress, or turn completion; never poll it.',
 		inputSchema: getCurrentSessionInputSchema,
 		annotations: { readOnlyHint: true },
 	},

@@ -12,7 +12,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import { createChatMementoKey, type IAgentHostChatContribution, type IAgentHostChatContributionContext, type IDispatchedAction, type IHydrationContext, type IRestoredChat, type ITurnEnd } from '../../../common/agentHostChatContributionsService.js';
-import { COMPUTER_USE_RECORDING_MAX_THOUGHTS, COMPUTER_USE_RECORDING_MAX_THOUGHT_TEXT_LENGTH, isComputerUseRecordingThoughtText, type IComputerUseRecordingThought } from '../../../common/computerUseRecording.js';
+import { COMPUTER_USE_RECORDING_MAX_THOUGHTS, COMPUTER_USE_RECORDING_MAX_THOUGHT_TEXT_LENGTH, isComputerUseRecordingThoughtText, type ComputerUseRecordingActionKind, type IComputerUseRecordingThought } from '../../../common/computerUseRecording.js';
 import { buildMcpChannel } from '../../../common/mcpChannel.js';
 import { AgentSystemNotificationKind, toAgentSystemNotificationMeta } from '../../../common/meta/agentSystemNotificationMeta.js';
 import { readToolCallMeta } from '../../../common/meta/agentToolCallMeta.js';
@@ -39,7 +39,10 @@ interface IActiveRecording {
 	readonly recordingId: string;
 	readonly memento: ISettableObservable<IRecordingMemento>;
 	readonly thoughtState: ITurnThoughtState;
+	readonly pendingActions: Map<string, { readonly kind: ComputerUseRecordingActionKind; readonly occurredAt: number }>;
+	readonly bufferedActions: { readonly kind: ComputerUseRecordingActionKind; readonly occurredAt: number }[];
 	recorder: Promise<ComputerUseTurnRecorder | undefined>;
+	recorderInstance?: ComputerUseTurnRecorder;
 	suppressNotice: boolean;
 	finalization?: Promise<void>;
 }
@@ -61,6 +64,21 @@ interface ITurnThoughtState {
 }
 
 const recordingMementoKey = createChatMementoKey<IRecordingMemento, [turnId: string]>('computerUseRecording', () => ({ started: false }));
+
+function toRecordingActionKind(toolName: string | undefined): ComputerUseRecordingActionKind | undefined {
+	switch (toolName) {
+		case 'click': return 'click';
+		case 'set_value':
+		case 'patch_text':
+		case 'type_text': return 'text';
+		case 'press_key': return 'key';
+		case 'scroll': return 'scroll';
+		case 'drag': return 'drag';
+		case 'perform_secondary_action': return 'secondary';
+		case 'launch_app': return 'application';
+		default: return undefined;
+	}
+}
 
 export class ComputerUseRecordingContribution extends Disposable implements IAgentHostChatContribution {
 	static readonly id = 'computerUseRecording';
@@ -108,10 +126,24 @@ export class ComputerUseRecordingContribution extends Disposable implements IAge
 
 		this._captureSharedThought(dispatched.channel, action);
 		this._flushPendingNotices(dispatched.channel);
-		if (action.type !== ActionType.ChatToolCallReady
-			|| readToolCallMeta(action).mcpServerName !== COMPUTER_USE_SERVER_NAME
+		const active = action.type === ActionType.ChatToolCallReady || action.type === ActionType.ChatToolCallComplete
+			? this._active.get(dispatched.channel)?.get(action.turnId)
+			: undefined;
+		if (action.type === ActionType.ChatToolCallComplete && active) {
+			this._completeAction(active, action.toolCallId, action.result.success);
+			return;
+		}
+		if (action.type !== ActionType.ChatToolCallReady) {
+			return;
+		}
+		const toolMeta = readToolCallMeta(action);
+		if (toolMeta.mcpServerName !== COMPUTER_USE_SERVER_NAME
 			|| this._stateManager.getActiveTurnId(dispatched.channel) !== action.turnId
 			|| isSessionStatusArchived(this._stateManager.getSessionState(dispatched.session)?.status)) {
+			return;
+		}
+		if (active) {
+			this._trackAction(active, action.toolCallId, toRecordingActionKind(toolMeta.mcpToolName));
 			return;
 		}
 		const memento = this._context.memento(recordingMementoKey, dispatched.channel, action.turnId);
@@ -128,9 +160,12 @@ export class ComputerUseRecordingContribution extends Disposable implements IAge
 			recordingId,
 			memento,
 			thoughtState,
+			pendingActions: new Map(),
+			bufferedActions: [],
 			suppressNotice: false,
 			recorder: Promise.resolve(undefined),
 		};
+		this._trackAction(entry, action.toolCallId, toRecordingActionKind(toolMeta.mcpToolName));
 		entry.recorder = this._createRecorder(entry).catch(error => {
 			this._logService.warn(`[ComputerUseRecording] Failed to start recording: ${error instanceof Error ? error.message : String(error)}`);
 			return undefined;
@@ -178,11 +213,35 @@ export class ComputerUseRecordingContribution extends Disposable implements IAge
 			readResource: uri => this._providerService.handleMcpRequest(channel, 'resources/read', { uri }),
 		});
 		recorder.start();
+		entry.recorderInstance = recorder;
+		for (const action of entry.bufferedActions.splice(0)) {
+			recorder.recordAction(action.kind, action.occurredAt);
+		}
 		entry.thoughtState.recorder = recorder;
 		for (const thought of entry.thoughtState.buffered.splice(0)) {
 			recorder.recordThought(thought);
 		}
 		return recorder;
+	}
+
+	private _trackAction(entry: IActiveRecording, toolCallId: string, kind: ComputerUseRecordingActionKind | undefined): void {
+		if (!kind || entry.pendingActions.has(toolCallId)) {
+			return;
+		}
+		entry.pendingActions.set(toolCallId, { kind, occurredAt: systemComputerUseRecordingScheduler.now() });
+	}
+
+	private _completeAction(entry: IActiveRecording, toolCallId: string, success: boolean): void {
+		const action = entry.pendingActions.get(toolCallId);
+		entry.pendingActions.delete(toolCallId);
+		if (!action || !success) {
+			return;
+		}
+		if (entry.recorderInstance) {
+			entry.recorderInstance.recordAction(action.kind, action.occurredAt);
+		} else {
+			entry.bufferedActions.push(action);
+		}
 	}
 
 	private _setActive(entry: IActiveRecording): void {

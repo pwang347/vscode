@@ -17,6 +17,7 @@ import type { IActiveSubscriptionInfo, IAgentSubscription } from './state/agentS
 import type { IRemoteWatchHandle } from './agentHostFileSystemProvider.js';
 import type { IAgentHostResourceUriMapper } from './agentHostUri.js';
 import type { IAgentHostClientTelemetryContext } from './agentHostTelemetry.js';
+import type { IAgentHostResourceReadRangeParams, IAgentHostResourceReadRangeResult } from './agentHostResourceReadRange.js';
 import type { CompletionsParams, CompletionsResult, CreateTerminalParams, ResolveSessionConfigResult, SessionConfigCompletionsResult } from './state/protocol/commands.js';
 import type { AutomationCapabilities, InitializeResult } from './state/protocol/common/commands.js';
 import type { InvokeChangesetOperationParams, InvokeChangesetOperationResult } from './state/protocol/channels-changeset/commands.js';
@@ -1002,6 +1003,9 @@ export interface IAgentService {
 	 * or reading files from the remote filesystem).
 	 */
 	resourceRead(uri: URI, encoding?: ContentEncoding): Promise<ResourceReadResult>;
+
+	/** Optional bounded local-file extension for clients that cannot receive whole resources. */
+	resourceReadRange?(params: IAgentHostResourceReadRangeParams): Promise<IAgentHostResourceReadRangeResult>;
 
 	/**
 	 * Write content to a file on the agent host's filesystem.

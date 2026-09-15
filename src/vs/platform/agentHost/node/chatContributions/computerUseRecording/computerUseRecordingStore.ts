@@ -10,7 +10,7 @@ import { Schemas } from '../../../../../base/common/network.js';
 import { join } from '../../../../../base/common/path.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
-import { COMPUTER_USE_RECORDING_FORMAT_VERSION, COMPUTER_USE_RECORDING_MAX_DURATION_MS, COMPUTER_USE_RECORDING_MAX_GAPS, COMPUTER_USE_RECORDING_MAX_MANIFEST_BYTES, COMPUTER_USE_RECORDING_MAX_SEGMENT_BYTES, COMPUTER_USE_RECORDING_MAX_SEGMENT_DURATION_MS, COMPUTER_USE_RECORDING_MAX_SEGMENT_SAMPLES, COMPUTER_USE_RECORDING_MAX_SIZE_BYTES, COMPUTER_USE_RECORDING_MAX_THOUGHTS, type ComputerUseRecordingGapReason, type IComputerUseRecordingDecoderConfig, type IComputerUseRecordingFocus, type IComputerUseRecordingGap, type IComputerUseRecordingManifest, type IComputerUseRecordingSample, type IComputerUseRecordingSegmentReference, type IComputerUseRecordingTarget, type IComputerUseRecordingThought, isComputerUseRecordingId, isComputerUseRecordingSegmentFile, parseComputerUseRecordingManifest, parseComputerUseRecordingManifestJson, parseComputerUseRecordingSegment, parseComputerUseRecordingThought, serializeComputerUseRecordingSegment } from '../../../common/computerUseRecording.js';
+import { COMPUTER_USE_RECORDING_FORMAT_VERSION, COMPUTER_USE_RECORDING_MAX_ACTIONS, COMPUTER_USE_RECORDING_MAX_DURATION_MS, COMPUTER_USE_RECORDING_MAX_GAPS, COMPUTER_USE_RECORDING_MAX_MANIFEST_BYTES, COMPUTER_USE_RECORDING_MAX_SEGMENT_BYTES, COMPUTER_USE_RECORDING_MAX_SEGMENT_DURATION_MS, COMPUTER_USE_RECORDING_MAX_SEGMENT_SAMPLES, COMPUTER_USE_RECORDING_MAX_SIZE_BYTES, COMPUTER_USE_RECORDING_MAX_THOUGHTS, type ComputerUseRecordingGapReason, type IComputerUseRecordingAction, type IComputerUseRecordingDecoderConfig, type IComputerUseRecordingFocus, type IComputerUseRecordingGap, type IComputerUseRecordingManifest, type IComputerUseRecordingSample, type IComputerUseRecordingSegmentReference, type IComputerUseRecordingTarget, type IComputerUseRecordingThought, isComputerUseRecordingId, isComputerUseRecordingSegmentFile, parseComputerUseRecordingAction, parseComputerUseRecordingManifest, parseComputerUseRecordingManifestJson, parseComputerUseRecordingSegment, parseComputerUseRecordingThought, serializeComputerUseRecordingSegment } from '../../../common/computerUseRecording.js';
 
 export const COMPUTER_USE_RECORDINGS_DIRECTORY = 'computer-use-recordings';
 export const COMPUTER_USE_RECORDING_MANIFEST_FILE = 'manifest.json';
@@ -192,10 +192,12 @@ export class ComputerUseRecordingStore {
 	private readonly _segments: IComputerUseRecordingSegmentReference[] = [];
 	private readonly _gaps: IComputerUseRecordingGap[] = [];
 	private readonly _thoughts: IComputerUseRecordingThought[] = [];
+	private readonly _actions: IComputerUseRecordingAction[] = [];
 	private _current: ICurrentSegment | undefined;
 	private _nextSegmentNumber = 1;
 	private _timelineEndMs = 0;
 	private _lastThoughtTimeMs = -1;
+	private _lastActionTimeMs = -1;
 	private _trimmed = false;
 	private _finalized = false;
 	private _result: IComputerUseRecordingFinalization | undefined;
@@ -399,6 +401,22 @@ export class ComputerUseRecordingStore {
 		}
 	}
 
+	recordAction(action: IComputerUseRecordingAction): void {
+		if (this._finalized) {
+			throw new Error('Cannot append an action to a finalized Computer Use recording.');
+		}
+		const parsed = parseComputerUseRecordingAction(action);
+		if (parsed.timeMs < this._lastActionTimeMs) {
+			throw new Error('Invalid Computer Use recording action order.');
+		}
+		this._lastActionTimeMs = parsed.timeMs;
+		this._actions.push(parsed);
+		if (this._actions.length > COMPUTER_USE_RECORDING_MAX_ACTIONS) {
+			this._actions.shift();
+			this._trimmed = true;
+		}
+	}
+
 	private _wouldExceedCurrent(frame: IComputerUseRecordingSample, coalesces: boolean): boolean {
 		const current = this._current;
 		if (!current) {
@@ -535,6 +553,7 @@ export class ComputerUseRecordingStore {
 		if (firstStart === undefined) {
 			this._gaps.splice(0);
 			this._thoughts.splice(0);
+			this._actions.splice(0);
 		} else {
 			for (let index = this._gaps.length - 1; index >= 0; index--) {
 				if (this._gaps[index].startTimeMs < firstStart) {
@@ -543,6 +562,9 @@ export class ComputerUseRecordingStore {
 			}
 			while (this._thoughts[0]?.timeMs < firstStart) {
 				this._thoughts.shift();
+			}
+			while (this._actions[0]?.timeMs < firstStart) {
+				this._actions.shift();
 			}
 		}
 		return evicted;
@@ -556,6 +578,7 @@ export class ComputerUseRecordingStore {
 			...this._gaps.map(gap => gap.startTimeMs + gap.durationMs),
 		);
 		const thoughts = this._thoughts.filter(thought => thought.timeMs >= firstStart && thought.timeMs <= lastEnd);
+		const actions = this._actions.filter(action => action.timeMs >= firstStart && action.timeMs <= lastEnd);
 		const manifest = parseComputerUseRecordingManifest({
 			version: COMPUTER_USE_RECORDING_FORMAT_VERSION,
 			recordingId: this._recordingId,
@@ -567,6 +590,7 @@ export class ComputerUseRecordingStore {
 			segments: this._segments,
 			gaps: this._gaps,
 			...(thoughts.length > 0 ? { thoughts } : {}),
+			...(actions.length > 0 ? { actions } : {}),
 		});
 		await writeFileAtomic(
 			join(this._recordingDirectory.fsPath, COMPUTER_USE_RECORDING_MANIFEST_FILE),

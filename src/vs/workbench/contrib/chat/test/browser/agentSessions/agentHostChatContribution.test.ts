@@ -1341,7 +1341,7 @@ suite('AgentHostChatContribution', () => {
 					content: new MarkdownString('Entered text in TextEdit'),
 					icon: Codicon.playCircle,
 					presentation: 'computerUseRecording',
-					accessibilityLabel: 'Entered text in TextEdit. Computer Use video recording, last 2:05.',
+					accessibilityLabel: 'Entered text in TextEdit. Play from the beginning of the retained Computer Use video recording, last 2:05.',
 					computerUseRecording: {
 						title: 'Entered text in TextEdit',
 						durationMs: 125_000,
@@ -1349,7 +1349,7 @@ suite('AgentHostChatContribution', () => {
 						recordingUri,
 						command: {
 							id: 'sessions.openComputerUseRecording',
-							title: 'Play Entered text in TextEdit',
+							title: 'Play Entered text in TextEdit from the Beginning',
 							tooltip: 'Open this host-recorded Computer Use session in the Computer Use player.',
 							arguments: [recordingUri.toString(), 'Entered text in TextEdit'],
 						},

@@ -177,6 +177,82 @@ suite('ComputerUsePlayer', () => {
 		});
 	});
 
+	test('click feedback uses a prominent high-contrast display treatment', async () => {
+		const { player, source, scheduler, canvas } = setup();
+		player.domNode.style.setProperty('--vscode-spacing-size40', '4px');
+		player.domNode.style.setProperty('--vscode-spacing-size160', '16px');
+		player.domNode.style.setProperty('--vscode-spacing-size320', '32px');
+		player.domNode.style.setProperty('--vscode-codiconFontSize', '16px');
+		player.domNode.style.setProperty('--vscode-cornerRadius-circle', '9999px');
+		player.domNode.style.setProperty('--vscode-strokeThickness', '1px');
+		player.domNode.style.setProperty('--vscode-editorWidget-background', 'rgb(10, 10, 10)');
+		player.domNode.style.setProperty('--vscode-editor-background', 'rgb(0, 0, 0)');
+		player.domNode.style.setProperty('--vscode-foreground', 'rgb(250, 250, 250)');
+		player.domNode.style.setProperty('--vscode-icon-foreground', 'rgb(100, 100, 100)');
+		player.domNode.style.setProperty('--vscode-contrastActiveBorder', 'rgb(255, 255, 0)');
+		player.domNode.style.setProperty('--vscode-widget-shadow', 'rgb(0, 0, 0)');
+		source.results.push(videoBatch([videoFrame(1, true)]));
+		player.setVisible(true);
+		await scheduler.advance(300);
+		canvas.click();
+		const feedback = player.domNode.querySelector<HTMLElement>('.computer-use-playback-feedback')!;
+		const icon = player.domNode.querySelector<HTMLElement>('.computer-use-playback-feedback-icon')!;
+		const feedbackStyle = mainWindow.getComputedStyle(feedback);
+		const iconStyle = mainWindow.getComputedStyle(icon);
+		const iconBounds = icon.getBoundingClientRect();
+		const normal = {
+			surface: {
+				width: feedbackStyle.width,
+				height: feedbackStyle.height,
+				opacity: feedbackStyle.opacity,
+				background: feedbackStyle.backgroundColor,
+				border: feedbackStyle.borderColor,
+				shadow: feedbackStyle.boxShadow,
+			},
+			icon: {
+				fontSize: iconStyle.fontSize,
+				width: iconBounds.width,
+				height: iconBounds.height,
+				color: iconStyle.color,
+			},
+		};
+		player.domNode.parentElement!.classList.add('hc-black');
+		const highContrastStyle = mainWindow.getComputedStyle(feedback);
+
+		assert.deepStrictEqual({
+			normal,
+			highContrast: {
+				opacity: highContrastStyle.opacity,
+				background: highContrastStyle.backgroundColor,
+				border: highContrastStyle.borderColor,
+				shadow: highContrastStyle.boxShadow,
+			},
+		}, {
+			normal: {
+				surface: {
+					width: '64px',
+					height: '64px',
+					opacity: '1',
+					background: 'rgb(10, 10, 10)',
+					border: 'rgb(250, 250, 250)',
+					shadow: 'rgb(0, 0, 0) 0px 4px 16px 0px',
+				},
+				icon: {
+					fontSize: '16px',
+					width: 32,
+					height: 32,
+					color: 'rgb(250, 250, 250)',
+				},
+			},
+			highContrast: {
+				opacity: '1',
+				background: 'rgb(0, 0, 0)',
+				border: 'rgb(255, 255, 0)',
+				shadow: 'none',
+			},
+		});
+	});
+
 	test('annotates a frozen frame and attaches it to the exact chat', async () => {
 		const context = setup();
 		context.source.results.push(videoBatch([videoFrame(1, true)]));
@@ -388,15 +464,18 @@ suite('ComputerUsePlayer', () => {
 		context.player.pauseViewing();
 		context.player.startAnnotation();
 		context.player.annotationCanvas.canvas.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Escape' }));
+		await context.scheduler.advance(3000);
 
 		assert.deepStrictEqual({
 			annotating: context.player.annotationCanvas.isActive,
 			paused: context.player.video.paused.get(),
 			status: context.player.video.state.get().status,
+			controlsHidden: !context.player.domNode.classList.contains('is-controls-visible'),
 		}, {
 			annotating: false,
 			paused: true,
 			status: 'paused',
+			controlsHidden: true,
 		});
 	});
 
@@ -496,6 +575,155 @@ suite('ComputerUsePlayer', () => {
 		assert.ok(!player.getAccessibleContent().includes('This is live video'));
 	});
 
+	test('restarting recorded playback always seeks to the beginning', async () => {
+		const { player, source } = setup('recording');
+		player.video.seek(2000);
+		player.restartRecordingPlayback();
+
+		assert.deepStrictEqual({
+			seekCalls: source.seekCalls,
+			positionMs: source.recordingPositionMs.get(),
+		}, {
+			seekCalls: [2000, 0],
+			positionMs: 0,
+		});
+	});
+
+	test('recording timeline distinguishes elapsed footage', () => {
+		const { player, source } = setup('recording');
+		player.domNode.style.setProperty('--vscode-descriptionForeground', 'rgb(255, 255, 255)');
+		player.domNode.style.setProperty('--vscode-editor-background', 'rgb(0, 0, 0)');
+		player.domNode.style.setProperty('--vscode-foreground', 'rgb(255, 255, 255)');
+		source.recordingPositionMs.set(2000, undefined);
+		const progress = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-progress')!;
+		const rail = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-rail')!;
+		const thumb = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-thumb')!;
+
+		assert.deepStrictEqual({
+			progressWidth: progress.style.width,
+			progressColor: mainWindow.getComputedStyle(progress).backgroundColor,
+			railColor: mainWindow.getComputedStyle(rail).backgroundColor,
+			thumbPosition: thumb.style.left,
+			thumbColor: mainWindow.getComputedStyle(thumb).backgroundColor,
+		}, {
+			progressWidth: '50%',
+			progressColor: 'color(srgb 0.55 0.55 0.55)',
+			railColor: 'color(srgb 1 1 1 / 0.2)',
+			thumbPosition: '50%',
+			thumbColor: 'color(srgb 0.55 0.55 0.55)',
+		});
+	});
+
+	test('recording timeline previews prospective progress without moving playback', () => {
+		const { player, source } = setup('recording');
+		player.domNode.style.width = '800px';
+		source.recordingPositionMs.set(1000, undefined);
+		const track = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-track')!;
+		const progress = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-progress')!;
+		const previewProgress = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-preview-progress')!;
+		const thumb = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-thumb')!;
+		const trackBounds = track.getBoundingClientRect();
+
+		track.dispatchEvent(new mainWindow.PointerEvent('pointermove', {
+			bubbles: true,
+			clientX: trackBounds.left + trackBounds.width * 0.75,
+		}));
+		const hovered = {
+			progressWidth: progress.style.width,
+			previewProgressWidth: previewProgress.style.width,
+			thumbPosition: thumb.style.left,
+		};
+		track.dispatchEvent(new mainWindow.PointerEvent('pointerleave', { bubbles: true }));
+
+		assert.deepStrictEqual({
+			hovered,
+			previewProgressAfterLeave: previewProgress.style.width,
+		}, {
+			hovered: {
+				progressWidth: '25%',
+				previewProgressWidth: '75%',
+				thumbPosition: '25%',
+			},
+			previewProgressAfterLeave: '0%',
+		});
+	});
+
+	test('recording controls overlay the video and hide without pointer intent', async () => {
+		const { player, source, scheduler } = setup('recording');
+		source.results.push(videoBatch([videoFrame(1, true)]));
+		player.setVisible(true);
+		await scheduler.advance(300);
+		const stage = player.domNode.querySelector<HTMLElement>('.computer-use-stage')!;
+		const controls = player.domNode.querySelector<HTMLElement>('.computer-use-controls')!;
+		const timeline = player.domNode.querySelector<HTMLElement>('.computer-use-timeline')!;
+		const timelineInput = player.domNode.querySelector<HTMLInputElement>('.computer-use-timeline-input')!;
+
+		await scheduler.advance(3000);
+		const idle = {
+			visibleClass: player.domNode.classList.contains('is-controls-visible'),
+			opacity: mainWindow.getComputedStyle(controls).opacity,
+			timelinePointerEvents: mainWindow.getComputedStyle(timeline).pointerEvents,
+		};
+		stage.dispatchEvent(new mainWindow.Event('pointermove'));
+		const pointer = {
+			visibleClass: player.domNode.classList.contains('is-controls-visible'),
+			opacity: mainWindow.getComputedStyle(controls).opacity,
+			timelinePointerEvents: mainWindow.getComputedStyle(timeline).pointerEvents,
+		};
+		stage.dispatchEvent(new mainWindow.Event('pointerleave'));
+		const outside = {
+			visibleClass: player.domNode.classList.contains('is-controls-visible'),
+			opacity: mainWindow.getComputedStyle(controls).opacity,
+			timelinePointerEvents: mainWindow.getComputedStyle(timeline).pointerEvents,
+		};
+		timelineInput.focus();
+		const keyboardFocus = {
+			opacity: mainWindow.getComputedStyle(controls).opacity,
+			timelinePointerEvents: mainWindow.getComputedStyle(timeline).pointerEvents,
+		};
+		timelineInput.blur();
+		await scheduler.advance(3000);
+		const keyboardBlurOpacity = mainWindow.getComputedStyle(controls).opacity;
+		stage.dispatchEvent(new mainWindow.Event('pointermove'));
+		player.domNode.querySelector<HTMLCanvasElement>('.computer-use-video')!.click();
+		stage.dispatchEvent(new mainWindow.Event('pointerleave'));
+
+		assert.deepStrictEqual({
+			timelineInControls: controls.contains(timeline),
+			controlsInStage: stage.contains(controls),
+			idle,
+			pointer,
+			outside,
+			keyboardFocus,
+			keyboardBlurOpacity,
+			pausedOutsideOpacity: mainWindow.getComputedStyle(controls).opacity,
+		}, {
+			timelineInControls: true,
+			controlsInStage: true,
+			idle: {
+				visibleClass: false,
+				opacity: '0',
+				timelinePointerEvents: 'none',
+			},
+			pointer: {
+				visibleClass: true,
+				opacity: '1',
+				timelinePointerEvents: 'auto',
+			},
+			outside: {
+				visibleClass: false,
+				opacity: '0',
+				timelinePointerEvents: 'none',
+			},
+			keyboardFocus: {
+				opacity: '1',
+				timelinePointerEvents: 'auto',
+			},
+			keyboardBlurOpacity: '0',
+			pausedOutsideOpacity: '0',
+		});
+	});
+
 	test('recording timeline previews frames and marks unchanged footage', async () => {
 		const { player, source, scheduler } = setup('recording');
 		await scheduler.advance(0);
@@ -535,6 +763,68 @@ suite('ComputerUsePlayer', () => {
 			},
 			previewCalls: [2000],
 			accessibleTimeline: true,
+		});
+	});
+
+	test('recording timeline exposes categorized action markers that seek and preview', async () => {
+		const { player, source, scheduler } = setup('recording');
+		await scheduler.advance(0);
+		const markers = [...player.domNode.querySelectorAll<HTMLButtonElement>('.computer-use-timeline-action')];
+		assert.strictEqual(markers.length, 3);
+		player.domNode.style.setProperty('--vscode-spacing-size20', '2px');
+		player.domNode.style.setProperty('--vscode-spacing-size60', '6px');
+		markers[0].focus();
+		markers[0].dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+		await scheduler.advance(0);
+		const focused = mainWindow.document.activeElement as HTMLButtonElement;
+		const markerStyles = markers.map(marker => {
+			const style = mainWindow.getComputedStyle(marker, '::before');
+			return { width: style.width, height: style.height, opacity: style.opacity };
+		});
+		const previewProgress = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-preview-progress')!;
+		focused.dispatchEvent(new mainWindow.Event('focus'));
+		const focusedPreviewProgress = previewProgress.style.width;
+		focused.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		const previewProgressAfterEscape = previewProgress.style.width;
+		focused.click();
+		const previewAction = player.domNode.querySelector<HTMLElement>('.computer-use-timeline-preview-action');
+
+		assert.deepStrictEqual({
+			classes: markers.map(marker => marker.className),
+			labels: markers.map(marker => marker.getAttribute('aria-label')),
+			focused: focused.getAttribute('aria-label'),
+			tabStops: markers.map(marker => marker.tabIndex),
+			monochrome: new Set(markers.map(marker => mainWindow.getComputedStyle(marker).color)).size === 1,
+			markerStyles,
+			focusedPreviewProgress,
+			previewProgressAfterEscape,
+			previewAction: previewAction?.textContent,
+			seekCalls: source.seekCalls,
+			accessible: player.getAccessibleContent().includes('Recorded actions: 3.'),
+		}, {
+			classes: [
+				'computer-use-timeline-action computer-use-timeline-action-click',
+				'computer-use-timeline-action computer-use-timeline-action-text',
+				'computer-use-timeline-action computer-use-timeline-action-scroll',
+			],
+			labels: [
+				'Click at 0:00. Activate to seek.',
+				'Text entry at 0:02. Activate to seek.',
+				'Scroll at 0:03. Activate to seek.',
+			],
+			focused: 'Text entry at 0:02. Activate to seek.',
+			tabStops: [-1, 0, -1],
+			monochrome: true,
+			markerStyles: [
+				{ width: '2px', height: '6px', opacity: '0.4' },
+				{ width: '2px', height: '6px', opacity: '0.4' },
+				{ width: '2px', height: '6px', opacity: '0.4' },
+			],
+			focusedPreviewProgress: '50%',
+			previewProgressAfterEscape: '0%',
+			previewAction: 'Text entry',
+			seekCalls: [2000],
+			accessible: true,
 		});
 	});
 
@@ -744,16 +1034,16 @@ suite('ComputerUsePlayer', () => {
 		});
 	});
 
-	test('hovering live controls suspends their idle timeout', async () => {
+	test('hovering the video controls suspends their idle timeout', async () => {
 		const { player, source, scheduler } = setup();
 		source.results.push(videoBatch([videoFrame(1, true)]));
 		player.setVisible(true);
 		await scheduler.advance(300);
-		const toolbar = player.domNode.querySelector<HTMLElement>('.computer-use-toolbar')!;
-		toolbar.dispatchEvent(new mainWindow.Event('mouseenter'));
+		const controls = player.domNode.querySelector<HTMLElement>('.computer-use-controls')!;
+		controls.dispatchEvent(new mainWindow.Event('mouseenter'));
 		await scheduler.advance(3000);
 		const visibleWhileHovered = player.domNode.classList.contains('is-controls-visible');
-		toolbar.dispatchEvent(new mainWindow.Event('mouseleave'));
+		controls.dispatchEvent(new mainWindow.Event('mouseleave'));
 		await scheduler.advance(3000);
 		assert.deepStrictEqual({
 			visibleWhileHovered,

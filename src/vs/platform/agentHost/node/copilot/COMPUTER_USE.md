@@ -173,6 +173,14 @@ their original timeline positions. Old manifests without thought events remain
 valid. User messages, tool inputs/results, final assistant content, credentials,
 paths, and hidden reasoning are never recorded as thought events.
 
+Version 1 manifests may also contain up to 4,096 timestamped, categorized
+successful GUI actions: click, text entry/edit, key press, scroll, drag,
+secondary action, and application launch. The recorder derives categories from
+the exact Computer Use tool identity and persists an event only after that tool
+completes successfully. It never records tool arguments, typed text,
+coordinates, observation calls, or failed/denied actions. Old manifests without
+action events remain valid.
+
 Recordings live under the owning session-data directory in a hashed chat
 subdirectory. A completed host-owned local turn adds a video-preview card to
 that chat after it becomes idle. The card title reuses the completed turn's
@@ -180,14 +188,59 @@ existing response summary rather than issuing another model request. It lazily
 decodes one keyframe for its poster and contains only bounded metadata plus a
 manifest content reference. Opening it fetches segment bytes one at a time
 through the existing Agent Host resource transport. Recorded playback includes
-an accessible timeline slider for seeking. Hovering or focusing the timeline
-lazily decodes a frame preview from the nearest preceding keyframe. Dimmed
-timeline ranges are derived from the existing duplicate-frame coalescing
-metadata and identify periods where the captured image did not change. The
+an accessible timeline slider in the in-video control overlay. Its filled
+segment marks elapsed footage. The overlay fades when pointer and keyboard
+intent are absent, while hovering or focusing the timeline reveals it and lazily
+decodes a frame preview from the nearest preceding keyframe. Dimmed timeline
+ranges are derived from the existing duplicate-frame coalescing metadata and
+identify periods where the captured image did not change. Colored action markers
+identify recorded GUI activity; hovering or focusing one labels the action and
+previews its frame, while activating it seeks to that timestamp. Dense action
+bursts compact to a bounded marker set. The
 client attaches the persisted recording notice to its source response so the
 card appears before that response's existing footer instead of creating a
 second footer. Restored cards remain clickable while their backing session data
 exists.
+
+### Bounded reads for mobile replay
+
+Mobile clients can read recording manifests and selected segment bytes through
+the `vscode/resourceReadRange` extension instead of requesting a complete file.
+Hosts implementing it advertise this initialization metadata:
+
+```json
+{ "_meta": { "vscode.resourceReadRange": { "version": 1, "maxBytes": 1048576 } } }
+```
+
+The request contains `channel: "ahp-root://"`, a local `file://` `uri`, `offset`,
+and `length`. `length` is at most 1 MiB; zero requests only version/size metadata
+while still checking read access. Optional `expectedSize` and `expectedEtag`
+pin subsequent reads to the same version. The response contains base64 `data`,
+`encoding: "base64"`, `offset`, total `size`, `etag`, and `eof`.
+
+Eligible files are regular local files of at most 16 MiB. The host uses bounded
+descriptor reads from its registered file provider, checks size/etag before and
+after reading, and reports changed or truncated resources as conflicts. The
+etag reflects provider size/mtime, not a content hash; finalized recording files
+must remain immutable. URI
+schemes other than local files, remote authorities, queries, fragments, and
+oversized/invalid ranges are rejected. The existing authenticated resource-read
+boundary is unchanged. Transport logs redact file references, version tokens,
+and binary range payloads.
+
+This is a read-only data-plane extension. Editor-hosted listeners explicitly
+enable it while keeping legacy management extensions such as shutdown disabled.
+Standard AHP `resourceRead`, protocol negotiation, native capture, and the
+recording file format are unchanged.
+
+Mobile replay requires the advertised capability and never falls back to a
+whole-file read or raises the mobile transport's existing message ceiling.
+
+Deploy the rebuilt Agent Host from this checkout to the machine owning the
+recordings, then restart that host when its active work can safely be interrupted
+and reconnect the mobile client. An already running host does not acquire the
+new method when JavaScript output is rebuilt. No native Computer Use helper
+rebuild or additional permissions are required for this read API.
 
 Removing a chat deletes only that chat's recording subtree. Archiving or
 removing a session stops active recorders and deletes the session recording

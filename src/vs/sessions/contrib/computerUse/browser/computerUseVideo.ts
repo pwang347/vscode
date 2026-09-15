@@ -9,6 +9,7 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { Disposable, IDisposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { ITransaction, observableValue, transaction } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
+import { COMPUTER_USE_RECORDING_MAX_SEGMENT_SAMPLES } from '../../../../platform/agentHost/common/computerUseRecording.js';
 import { IComputerUseVideoBatch, IComputerUseVideoConfig, IComputerUseVideoCursor, IComputerUseVideoFocus, IComputerUseVideoFrame, ISessionComputerUseVideoSource } from '../../../services/sessions/common/computerUse.js';
 
 export interface IComputerUseDecodedFrame {
@@ -411,6 +412,7 @@ export class ComputerUseVideo extends Disposable {
 		}
 
 		const frames = (batch.frames ?? []).filter(frame => frame.sequence > this.lastSequence);
+		const maximumEncodedFrames = this.source.kind === 'recording' ? COMPUTER_USE_RECORDING_MAX_SEGMENT_SAMPLES : MAX_ENCODED_FRAMES;
 		let lastGap = -1;
 		let previous = this.lastSequence;
 		for (let index = 0; index < frames.length; index++) {
@@ -420,7 +422,7 @@ export class ComputerUseVideo extends Disposable {
 			previous = frames[index].sequence;
 		}
 		const needsRecovery = changed || batch.dropped || lastGap >= 0 || this.lastSequence === 0
-			|| this.encoded.length + frames.length > MAX_ENCODED_FRAMES
+			|| this.encoded.length + frames.length > maximumEncodedFrames
 			|| encodedSize(this.encoded) + encodedSize(frames) > MAX_ENCODED_CHARACTERS;
 		if (needsRecovery) {
 			const candidates = lastGap >= 0 ? frames.slice(lastGap) : [...this.encoded, ...frames];
@@ -429,7 +431,7 @@ export class ComputerUseVideo extends Disposable {
 			}
 			const keyFrame = candidates.findLastIndex(frame => frame.keyFrame);
 			const recovered = keyFrame < 0 ? [] : candidates.slice(keyFrame);
-			if (!recovered.length || recovered.length > MAX_ENCODED_FRAMES || encodedSize(recovered) > MAX_ENCODED_CHARACTERS) {
+			if (!recovered.length || recovered.length > maximumEncodedFrames || encodedSize(recovered) > MAX_ENCODED_CHARACTERS) {
 				this.cursor = undefined;
 				if (resuming) {
 					this.publishResuming();
