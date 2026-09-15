@@ -2026,6 +2026,37 @@ suite('SessionServerTools', () => {
 		store.dispose();
 	});
 
+	test('get_current_session rejects repeated polling in the same turn', async () => {
+		const store = new DisposableStore();
+		const stateManager = store.add(new AgentHostStateManager(new NullLogService()));
+		let metadataReads = 0;
+		const group = createSessionServerToolGroup(createAccessor({
+			getSession: async () => {
+				metadataReads++;
+				return sessionMeta('s1', SessionStatus.InProgress, workspace);
+			},
+		}));
+		const context = executionContext('copilot:/s1');
+
+		const first = await group.execute(stateManager, context, SessionServerToolName.GetCurrentSession, {});
+		await assert.rejects(
+			Promise.resolve(group.execute(stateManager, context, SessionServerToolName.GetCurrentSession, {})),
+			/Do not poll session status/,
+		);
+		const nextTurn = await group.execute(stateManager, { ...context, turnId: 'turn-2' }, SessionServerToolName.GetCurrentSession, {});
+
+		assert.deepStrictEqual({
+			first: JSON.parse(first).status,
+			nextTurn: JSON.parse(nextTurn).status,
+			metadataReads,
+		}, {
+			first: 'inProgress',
+			nextTurn: 'inProgress',
+			metadataReads: 2,
+		});
+		store.dispose();
+	});
+
 	test('get_current_session does not depend on listing sessions', async () => {
 		const store = new DisposableStore();
 		const stateManager = store.add(new AgentHostStateManager(new NullLogService()));

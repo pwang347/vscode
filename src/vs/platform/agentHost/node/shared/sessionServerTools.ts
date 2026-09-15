@@ -36,6 +36,7 @@ const maxCreatedChats = 25;
 
 /** Process-wide backstop against runaway `send_message` fan-out. */
 const maxSentMessages = 50;
+const maxTrackedCurrentSessionTurns = 256;
 
 const sessionConfirmationToolNames: ReadonlySet<string> = new Set([SessionServerToolName.SetWorkspace, SessionServerToolName.CreateSession, SessionServerToolName.CreateChat, SessionServerToolName.SendMessage, SessionServerToolName.DeleteSession]);
 const createSessionRelationshipValues = ['currentSession', 'independent'] as const;
@@ -160,7 +161,7 @@ export const sessionServerToolDefinitions: IAgentServerToolDefinition[] = [
 	{
 		name: SessionServerToolName.GetCurrentSession,
 		title: 'Get Current Session',
-		description: 'Get identity metadata and the open link for the session this conversation is running in. Use only when another session-management operation needs this session URI or link, such as adding a chat. Do not use it to inspect available tools, application state, shell activity, subagent or task progress, or turn completion; never poll it.',
+		description: 'Get identity metadata and the open link for the session this conversation is running in. Use only when another session-management operation needs this session URI or link, such as adding a chat. Do not use it to inspect available tools, application state, shell activity, subagent or task progress, or turn completion; never poll it. At most one call is allowed per turn.',
 		inputSchema: getCurrentSessionInputSchema,
 		annotations: { readOnlyHint: true },
 	},
@@ -1510,6 +1511,7 @@ export function createSessionServerToolGroup(accessor?: ISessionServerToolAccess
 	let createdSessionCount = 0;
 	let createdChatCount = 0;
 	let sentMessageCount = 0;
+	const currentSessionTurns = new Set<string>();
 	const group: IServerToolGroup = {
 		definitions: sessionServerToolDefinitions,
 		// Remove after 2026-10-26; self-mapped because its arguments differ from create_session.
@@ -1539,9 +1541,29 @@ export function createSessionServerToolGroup(accessor?: ISessionServerToolAccess
 					}
 				case SessionServerToolName.GetCurrentSession:
 					{
-						const currentSession = currentSessionUri(currentChannel);
-						const metadata = await accessor.getSession(currentSession);
-						return serializeCurrentSession(currentSession, metadata ? [metadata] : []);
+						const turnKey = context.turnId ? `${currentChannel}\0${context.turnId}` : undefined;
+						if (turnKey && currentSessionTurns.has(turnKey)) {
+							throw new Error('Do not poll session status with get_current_session. Reuse the result from the first call and continue the original task.');
+						}
+						if (turnKey) {
+							currentSessionTurns.add(turnKey);
+							if (currentSessionTurns.size > maxTrackedCurrentSessionTurns) {
+								const oldestTurn = currentSessionTurns.values().next().value;
+								if (oldestTurn !== undefined) {
+									currentSessionTurns.delete(oldestTurn);
+								}
+							}
+						}
+						try {
+							const currentSession = currentSessionUri(currentChannel);
+							const metadata = await accessor.getSession(currentSession);
+							return serializeCurrentSession(currentSession, metadata ? [metadata] : []);
+						} catch (error) {
+							if (turnKey) {
+								currentSessionTurns.delete(turnKey);
+							}
+							throw error;
+						}
 					}
 				case SessionServerToolName.SetWorkspace: {
 					return applySetWorkspaceTool(accessor, rawArgs, URI.parse(currentChannel), context.turnId);
