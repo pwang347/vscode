@@ -650,7 +650,7 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 			this._logService.trace(`[Copilot:${plan.sessionId}] Calling SDK resumeSession...`);
 			const raw = await this._resumeSession(session, plan, config);
 			this._logService.trace(`[Copilot:${plan.sessionId}] SDK resumeSession succeeded after ${stopWatch.elapsed()}ms`);
-			return this._finalizeSession(raw, sandboxConfig, plan.sessionId, plan.fallback.model?.id);
+			return this._finalizeSession(raw, sandboxConfig, plan.sessionId, plan.fallback.model?.id, config.availableTools);
 		} catch (err) {
 			let resumeError = err;
 			const errCode = getCopilotSdkErrorCode(resumeError);
@@ -662,7 +662,7 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 				this._logService.warn(`[Copilot:${plan.sessionId}] Stored custom agent '${plan.resolvedAgentName}' was not found; retrying resume without a custom agent`);
 				try {
 					const raw = await this._resumeSession(session, fallbackPlan, fallbackConfig);
-					return this._finalizeSession(raw, sandboxConfig, plan.sessionId, fallbackPlan.fallback.model?.id);
+					return this._finalizeSession(raw, sandboxConfig, plan.sessionId, fallbackPlan.fallback.model?.id, fallbackConfig.availableTools);
 				} catch (retryErr) {
 					resumeError = retryErr;
 					this._logService.warn(`[Copilot:${plan.sessionId}] SDK resumeSession without custom agent failed: code=${getCopilotSdkErrorCode(retryErr)}, message=${getErrorMessage(retryErr)}`);
@@ -713,10 +713,16 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 			...(plan.resolvedAgentName ? { agent: plan.resolvedAgentName } : {}),
 			workingDirectory: plan.workingDirectory?.fsPath,
 		}));
-		return this._finalizeSession(raw, sandboxConfig, plan.sessionId, plan.model?.id);
+		return this._finalizeSession(raw, sandboxConfig, plan.sessionId, plan.model?.id, config.availableTools);
 	}
 
-	private async _finalizeSession(raw: CopilotSessionWrapper['session'], sandboxConfig: () => SandboxConfig, sessionId: string, modelId: string | undefined): Promise<CopilotSessionWrapper> {
+	private async _finalizeSession(
+		raw: CopilotSessionWrapper['session'],
+		sandboxConfig: () => SandboxConfig,
+		sessionId: string,
+		modelId: string | undefined,
+		availableTools: ResumeSessionConfig['availableTools'],
+	): Promise<CopilotSessionWrapper> {
 		try {
 			await this._applyScriptSafety(raw, sessionId);
 			await applySandboxConfig(raw, sandboxConfig(), sessionId, this._logService);
@@ -731,7 +737,8 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 		if (isGpt56Model(modelId)) {
 			await this._applyGpt56Customizations(raw, sessionId);
 		}
-		return new CopilotSessionWrapper(raw);
+		const initialAvailableTools = Array.isArray(availableTools) ? availableTools : availableTools?.toArray();
+		return new CopilotSessionWrapper(raw, initialAvailableTools);
 	}
 
 	/**

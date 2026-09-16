@@ -40,7 +40,10 @@ export class CopilotSessionWrapper extends Disposable {
 	private _disconnectPromise: Promise<void> | undefined;
 	private _disconnectCompleted = false;
 
-	constructor(readonly session: CopilotSession) {
+	constructor(
+		readonly session: CopilotSession,
+		readonly initialAvailableTools: readonly string[] | undefined = undefined,
+	) {
 		super();
 		const unsubscribeAll = session.on(event => {
 			if (event.type === 'session.shutdown') {
