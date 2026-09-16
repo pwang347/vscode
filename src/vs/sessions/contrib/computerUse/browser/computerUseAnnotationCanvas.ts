@@ -52,14 +52,17 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 	readonly annotationCount = observableValue(this, 0);
 	private readonly cursor: HTMLElement;
 	private readonly snapshot = dom.$<HTMLCanvasElement>('canvas');
+	private readonly strokeBase = dom.$<HTMLCanvasElement>('canvas');
 	private readonly context: CanvasRenderingContext2D;
 	private readonly snapshotContext: CanvasRenderingContext2D;
+	private readonly strokeBaseContext: CanvasRenderingContext2D;
 	private readonly _onDidRequestExit = this._register(new Emitter<void>());
 	readonly onDidRequestExit: Event<void> = this._onDidRequestExit.event;
 	private drawing = false;
 	private moved = false;
 	private keyboardDrawing = false;
 	private lastPoint: IAnnotationPoint | undefined;
+	private strokePoints: IAnnotationPoint[] = [];
 	private keyboardPoint: IAnnotationPoint | undefined;
 	private active = false;
 
@@ -78,11 +81,13 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 		this.cursor = dom.append(container, dom.$('.computer-use-annotation-cursor', { 'aria-hidden': 'true' }));
 		const context = this.canvas.getContext('2d', { alpha: false });
 		const snapshotContext = this.snapshot.getContext('2d', { alpha: false });
-		if (!context || !snapshotContext) {
+		const strokeBaseContext = this.strokeBase.getContext('2d', { alpha: false });
+		if (!context || !snapshotContext || !strokeBaseContext) {
 			throw new Error(localize('computerUse.annotationCanvasUnavailable', "A frame annotation surface is unavailable."));
 		}
 		this.context = context;
 		this.snapshotContext = snapshotContext;
+		this.strokeBaseContext = strokeBaseContext;
 		this._register(dom.addDisposableListener(this.canvas, dom.EventType.POINTER_DOWN, event => this.onPointerDown(event)));
 		this._register(dom.addDisposableListener(this.canvas, dom.EventType.POINTER_MOVE, event => this.onPointerMove(event)));
 		this._register(dom.addDisposableListener(this.canvas, dom.EventType.POINTER_UP, () => this.finishStroke()));
@@ -103,9 +108,10 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 		if (source.width < 1 || source.height < 1) {
 			return false;
 		}
-		this.canvas.width = this.snapshot.width = source.width;
-		this.canvas.height = this.snapshot.height = source.height;
+		this.canvas.width = this.snapshot.width = this.strokeBase.width = source.width;
+		this.canvas.height = this.snapshot.height = this.strokeBase.height = source.height;
 		this.snapshotContext.drawImage(source, 0, 0);
+		this.strokeBaseContext.drawImage(source, 0, 0);
 		this.context.drawImage(this.snapshot, 0, 0);
 		this.annotationCount.set(0, undefined);
 		this.keyboardPoint = { x: source.width / 2, y: source.height / 2 };
@@ -124,7 +130,8 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 		this.canvas.classList.remove('is-visible');
 		this.canvas.setAttribute('aria-hidden', 'true');
 		this.cursor.classList.remove('is-visible', 'is-drawing');
-		this.canvas.width = this.canvas.height = this.snapshot.width = this.snapshot.height = 0;
+		this.canvas.width = this.canvas.height = this.snapshot.width = this.snapshot.height = this.strokeBase.width = this.strokeBase.height = 0;
+		this.strokePoints = [];
 		this.annotationCount.set(0, undefined);
 	}
 
@@ -148,6 +155,7 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 		this.finishStroke();
 		this.finishKeyboardStroke();
 		this.context.drawImage(this.snapshot, 0, 0);
+		this.strokePoints = [];
 		this.annotationCount.set(0, undefined);
 	}
 
@@ -246,6 +254,8 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 		this.drawing = true;
 		this.moved = false;
 		this.lastPoint = point;
+		this.strokePoints = [point];
+		this.strokeBaseContext.drawImage(this.canvas, 0, 0);
 	}
 
 	private finishStroke(): void {
@@ -257,6 +267,7 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 		}
 		this.drawing = false;
 		this.lastPoint = undefined;
+		this.strokePoints = [];
 		this.moved = false;
 		this.annotationCount.set(this.annotationCount.get() + 1, undefined);
 	}
@@ -271,10 +282,27 @@ export class ComputerUseAnnotationCanvas extends Disposable {
 	}
 
 	private drawLine(from: IAnnotationPoint, to: IAnnotationPoint): void {
+		if (this.strokePoints.length === 0) {
+			this.strokePoints.push(from);
+		}
+		const last = this.strokePoints.at(-1);
+		if (!last || last.x !== to.x || last.y !== to.y) {
+			this.strokePoints.push(to);
+		}
+		this.context.drawImage(this.strokeBase, 0, 0);
 		this.configureContext();
 		this.context.beginPath();
-		this.context.moveTo(from.x, from.y);
-		this.context.lineTo(to.x, to.y);
+		this.context.moveTo(this.strokePoints[0].x, this.strokePoints[0].y);
+		if (this.strokePoints.length === 2) {
+			this.context.lineTo(to.x, to.y);
+		} else {
+			for (let index = 1; index < this.strokePoints.length - 1; index++) {
+				const point = this.strokePoints[index];
+				const next = this.strokePoints[index + 1];
+				this.context.quadraticCurveTo(point.x, point.y, (point.x + next.x) / 2, (point.y + next.y) / 2);
+			}
+			this.context.lineTo(to.x, to.y);
+		}
 		this.context.stroke();
 		this.context.restore();
 	}

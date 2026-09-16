@@ -399,6 +399,35 @@ suite('ComputerUsePlayer', () => {
 		});
 	});
 
+	test('highlighter strokes remain smooth and uniformly translucent across sampled points', async () => {
+		const context = setup();
+		context.source.results.push(videoBatch([videoFrame(1, true)]));
+		context.player.setVisible(true);
+		await context.scheduler.advance(300);
+		context.player.startAnnotation();
+		const canvas = context.player.annotationCanvas.canvas;
+		const canvasContext = canvas.getContext('2d')!;
+		canvasContext.fillStyle = 'black';
+		canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+		canvas.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: ' ' }));
+		for (let index = 0; index < 3; index++) {
+			canvas.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: 'ArrowRight' }));
+		}
+		canvas.dispatchEvent(new mainWindow.KeyboardEvent('keydown', { key: ' ' }));
+		const pixels = [18, 21, 23, 26, 28].map(x =>
+			Array.from(canvasContext.getImageData(x, 12, 1, 1).data));
+
+		assert.deepStrictEqual({
+			annotationCount: context.player.annotationCanvas.annotationCount.get(),
+			painted: pixels.every(pixel => pixel.some((channel, index) => index < 3 && channel > 0)),
+			uniform: new Set(pixels.map(pixel => pixel.join(','))).size === 1,
+		}, {
+			annotationCount: 1,
+			painted: true,
+			uniform: true,
+		});
+	});
+
 	test('attaches the frozen frame without requiring annotations', async () => {
 		const context = setup();
 		context.source.results.push(videoBatch([videoFrame(1, true)]));
