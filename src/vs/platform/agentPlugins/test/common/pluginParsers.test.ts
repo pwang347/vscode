@@ -166,10 +166,18 @@ suite('pluginParsers', () => {
 				args: ['server.js'],
 				env: { KEY: 'value' },
 				cwd: '/workspace',
+				deferTools: 'never',
 			});
 			assert.ok(result);
-			assert.strictEqual(result!.type, McpServerType.LOCAL);
-			assert.strictEqual((result as { command: string }).command, 'node');
+			assert.deepStrictEqual({
+				type: result.type,
+				command: (result as { command: string }).command,
+				deferTools: result.deferTools,
+			}, {
+				type: McpServerType.LOCAL,
+				command: 'node',
+				deferTools: 'never',
+			});
 		});
 
 		test('infers local type from command without explicit type', () => {

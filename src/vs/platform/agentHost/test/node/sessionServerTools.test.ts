@@ -2038,20 +2038,30 @@ suite('SessionServerTools', () => {
 		}));
 		const context = executionContext('copilot:/s1');
 
-		const first = await group.execute(stateManager, context, SessionServerToolName.GetCurrentSession, {});
+		const first = JSON.parse(await group.execute(stateManager, context, SessionServerToolName.GetCurrentSession, {}));
 		await assert.rejects(
 			Promise.resolve(group.execute(stateManager, context, SessionServerToolName.GetCurrentSession, {})),
 			/Do not poll session status/,
 		);
-		const nextTurn = await group.execute(stateManager, { ...context, turnId: 'turn-2' }, SessionServerToolName.GetCurrentSession, {});
+		const nextTurn = JSON.parse(await group.execute(stateManager, { ...context, turnId: 'turn-2' }, SessionServerToolName.GetCurrentSession, {}));
 
 		assert.deepStrictEqual({
-			first: JSON.parse(first).status,
-			nextTurn: JSON.parse(nextTurn).status,
+			first,
+			nextTurn,
 			metadataReads,
 		}, {
-			first: 'inProgress',
-			nextTurn: 'inProgress',
+			first: {
+				session: 'copilot:/s1',
+				openLink: 'agent-host-session://copilot/s1',
+				title: 'title-s1',
+				workingDirectory: 'file:///workspace/app',
+			},
+			nextTurn: {
+				session: 'copilot:/s1',
+				openLink: 'agent-host-session://copilot/s1',
+				title: 'title-s1',
+				workingDirectory: 'file:///workspace/app',
+			},
 			metadataReads: 2,
 		});
 		store.dispose();
@@ -2072,7 +2082,6 @@ suite('SessionServerTools', () => {
 			session: 'codex:/s1',
 			openLink: 'agent-host-session://codex/s1',
 			title: 'title-s1',
-			status: 'idle',
 			workingDirectory: 'file:///workspace/app',
 		});
 		store.dispose();

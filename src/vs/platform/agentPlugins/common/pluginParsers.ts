@@ -496,6 +496,7 @@ export function normalizeMcpServerConfiguration(rawConfig: unknown): IMcpServerC
 		: undefined;
 	const envFile = typeof candidate['envFile'] === 'string' ? candidate['envFile'] : undefined;
 	const cwd = typeof candidate['cwd'] === 'string' ? candidate['cwd'] : undefined;
+	const deferTools = candidate['deferTools'] === 'auto' || candidate['deferTools'] === 'never' ? candidate['deferTools'] : undefined;
 	const headers = candidate['headers'] && typeof candidate['headers'] === 'object'
 		? Object.fromEntries(Object.entries(candidate['headers'] as Record<string, unknown>)
 			.filter(([, value]) => typeof value === 'string')
@@ -515,14 +516,14 @@ export function normalizeMcpServerConfiguration(rawConfig: unknown): IMcpServerC
 		if (!command) {
 			return undefined;
 		}
-		return { type: McpServerType.LOCAL, command, args, env, envFile, cwd, dev };
+		return { type: McpServerType.LOCAL, command, args, env, envFile, cwd, ...(deferTools ? { deferTools } : {}), dev };
 	}
 
 	if (type === McpServerType.REMOTE || type === 'streamable-http' || type === 'sse' || (!type && url)) {
 		if (!url) {
 			return undefined;
 		}
-		return { type: McpServerType.REMOTE, ...(type === 'sse' || transport === 'sse' ? { transport: 'sse' as const } : {}), url, headers, ...(oauth ? { oauth } : {}), dev };
+		return { type: McpServerType.REMOTE, ...(type === 'sse' || transport === 'sse' ? { transport: 'sse' as const } : {}), url, headers, ...(oauth ? { oauth } : {}), ...(deferTools ? { deferTools } : {}), dev };
 	}
 
 	return undefined;

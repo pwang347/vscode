@@ -88,6 +88,7 @@ function toSdkMcpServer(_name: string, config: IMcpServerConfiguration, defaultC
 			tools: ['*'],
 			...(config.env && { env: toStringEnv(config.env) }),
 			...(effectiveCwd ? { cwd: effectiveCwd } : {}),
+			...(config.deferTools ? { deferTools: config.deferTools } : {}),
 		};
 	}
 	return {
@@ -96,6 +97,7 @@ function toSdkMcpServer(_name: string, config: IMcpServerConfiguration, defaultC
 		tools: ['*'],
 		...(config.headers && { headers: { ...config.headers } }),
 		...(config.oauth?.clientId && { oauthClientId: config.oauth.clientId }),
+		...(config.deferTools ? { deferTools: config.deferTools } : {}),
 	};
 }
 

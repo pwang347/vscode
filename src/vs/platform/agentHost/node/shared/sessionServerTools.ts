@@ -161,7 +161,7 @@ export const sessionServerToolDefinitions: IAgentServerToolDefinition[] = [
 	{
 		name: SessionServerToolName.GetCurrentSession,
 		title: 'Get Current Session',
-		description: 'Get identity metadata and the open link for the session this conversation is running in. Use only when another session-management operation needs this session URI or link, such as adding a chat. Do not use it to inspect available tools, application state, shell activity, subagent or task progress, or turn completion; never poll it. At most one call is allowed per turn.',
+		description: 'Get stable identity metadata and the open link for the session this conversation is running in. This tool does not report live session or turn status. Use it only when another session-management operation needs this session URI or link, such as adding a chat. Do not use it to inspect available tools, application state, shell activity, subagent or task progress, or turn completion; never poll it. At most one call is allowed per turn.',
 		inputSchema: getCurrentSessionInputSchema,
 		annotations: { readOnlyHint: true },
 	},
@@ -1365,7 +1365,9 @@ export function serializeCurrentSession(currentSession: URI, sessions: readonly 
 	return JSON.stringify({
 		session: currentSession.toString(),
 		openLink: buildOpenSessionLinkUri(currentSession),
-		...(meta ? serializeSession(meta) : {}),
+		...(meta?.summary !== undefined ? { title: meta.summary } : {}),
+		...(meta?.workingDirectories?.[0] !== undefined ? { workingDirectory: meta.workingDirectories[0].toString() } : {}),
+		...(meta?.project !== undefined ? { project: meta.project.displayName, projectUri: meta.project.uri.toString() } : {}),
 	});
 }
 

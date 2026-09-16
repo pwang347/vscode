@@ -48,6 +48,8 @@ export interface ICommonMcpServerConfiguration {
 	readonly type: McpServerType;
 	readonly version?: string;
 	readonly gallery?: boolean | string;
+	/** Whether this server's tools may be hidden behind runtime tool search. */
+	readonly deferTools?: 'auto' | 'never';
 }
 
 export interface IMcpStdioServerConfiguration extends ICommonMcpServerConfiguration {

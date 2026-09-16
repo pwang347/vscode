@@ -56,6 +56,7 @@ suite('copilotPluginConverters', () => {
 					args: ['server.js', '--port', '3000'],
 					env: { NODE_ENV: 'production', PORT: 3000 as unknown as string },
 					cwd: '/workspace',
+					deferTools: 'never',
 				},
 				customization: stubMcpCustomization('test-server'),
 			}];
@@ -69,6 +70,7 @@ suite('copilotPluginConverters', () => {
 					tools: ['*'],
 					env: { NODE_ENV: 'production', PORT: '3000' },
 					cwd: '/workspace',
+					deferTools: 'never',
 				},
 			});
 		});
