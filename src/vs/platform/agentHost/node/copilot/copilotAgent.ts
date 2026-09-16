@@ -822,6 +822,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 
 	private _client: CopilotClient | undefined;
 	private _clientStarting: Promise<CopilotClient> | undefined;
+	private _computerUseEnabled = false;
 	/**
 	 * Coalesces the whole acquire-and-self-heal sequence in `_ensureClient` so
 	 * that all concurrent callers share a single, global retry budget for
@@ -2178,6 +2179,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 			}
 			const client = this._client;
 			this._client = undefined;
+			this._computerUseEnabled = false;
 			this._clientStarting = undefined;
 			await client?.stop();
 			// The runtime subprocess is now dead, so it is safe to release the BYOK
@@ -2411,6 +2413,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 			}
 			this._logService.info('[Copilot] CopilotClient started successfully');
 			this._client = client;
+			this._computerUseEnabled = computerUsePlugin !== undefined;
 			this._clientStarting = undefined;
 			return client;
 		};
@@ -3965,6 +3968,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 				workingDirectory,
 				additionalDirectories: this._additionalCustomizationDirectories(resolvedWorkingDirectories),
 				resolvedAgentName: resolvedAgent?.name,
+				computerUseEnabled: this._computerUseEnabled,
 				snapshot,
 				disabledRootMcpServers: await this._disabledRootMcpServers(sessionUri, sdkSessionId, snapshot),
 				activeClientToolSet: activeClient.toolSet,
@@ -4959,6 +4963,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 					workingDirectory,
 					additionalDirectories: launchWorkingDirectories?.slice(1),
 					resolvedAgentName: info.agent ? this._resolveAgentName(snapshot, info.agent) : undefined,
+					computerUseEnabled: this._computerUseEnabled,
 					snapshot,
 					disabledRootMcpServers: await this._disabledRootMcpServers(configurationResource, info.sdkSessionId, snapshot),
 					activeClientToolSet: activeClient.toolSet,
@@ -5522,6 +5527,7 @@ export class CopilotAgent extends Disposable implements IAgent {
 			workingDirectory: resolvedWorkingDirectory,
 			additionalDirectories: this._additionalCustomizationDirectories(launchWorkingDirectories),
 			resolvedAgentName,
+			computerUseEnabled: this._computerUseEnabled,
 			snapshot,
 			disabledRootMcpServers: await this._disabledRootMcpServers(sessionUri, sessionId, snapshot),
 			activeClientToolSet: activeClient.toolSet,

@@ -10,7 +10,7 @@ import { dirname, join } from '../../../../base/common/path.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/common/utils.js';
 import { NullLogService } from '../../../log/common/log.js';
 import { AgentHostLaunchKind } from '../../common/agentHostTelemetry.js';
-import { resolveCopilotComputerUsePlugin } from '../../node/copilot/copilotComputerUse.js';
+import { createCopilotComputerUseAgent, resolveCopilotComputerUsePlugin } from '../../node/copilot/copilotComputerUse.js';
 
 class ComputerUseLogService extends NullLogService {
 	readonly warnings: string[] = [];
@@ -43,6 +43,48 @@ suite('Copilot Computer Use', () => {
 			...overrides,
 		};
 	}
+
+	test('creates a hard-scoped inferred agent for each supported platform', () => {
+		assert.deepStrictEqual({
+			windows: createCopilotComputerUseAgent('win32'),
+			macTools: createCopilotComputerUseAgent('darwin').tools,
+		}, {
+			windows: {
+				name: 'computer-use',
+				displayName: 'Computer Use',
+				description: 'Use for tasks that require observing or manipulating a desktop application UI when no dedicated app-specific MCP server can complete the task.',
+				tools: [
+					'computer-use-get_window_state',
+					'computer-use-list_apps',
+					'computer-use-click',
+					'computer-use-set_value',
+					'computer-use-patch_text',
+					'computer-use-type_text',
+					'computer-use-press_key',
+					'computer-use-scroll',
+					'computer-use-perform_secondary_action',
+					'computer-use-drag',
+					'computer-use-start_app',
+					'ask_user',
+				],
+				prompt: 'Complete the requested desktop application task using Computer Use tools. Stay in the direct app loop: discover only when necessary, perceive the exact window, perform the requested action, and verify the result. Do not delegate or switch to shell, terminal, browser, filesystem, session-management, skill, or agent-management tools.',
+				infer: true,
+			},
+			macTools: [
+				'computer-use-get_window_state',
+				'computer-use-list_apps',
+				'computer-use-click',
+				'computer-use-set_value',
+				'computer-use-patch_text',
+				'computer-use-type_text',
+				'computer-use-press_key',
+				'computer-use-scroll',
+				'computer-use-perform_secondary_action',
+				'computer-use-drag',
+				'ask_user',
+			],
+		});
+	});
 
 	async function createPlugin(path: string, platform: 'darwin' | 'win32' = 'darwin', appName = 'Copilot Computer Use.app'): Promise<void> {
 		const files = new Map([
