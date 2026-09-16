@@ -19,6 +19,8 @@ const PLAYBACK_BUFFER_MS = 250;
 const PAUSE_DETECTION_MS = 100;
 const MAX_PREVIEW_DECODE_FRAMES = 300;
 
+type ComputerUseRecordingStream = Required<Pick<IComputerUseVideoBatch, 'streamId' | 'target' | 'config'>>;
+
 /** Validated metadata displayed for a recorded Computer Use operation. */
 export interface IComputerUseRecordingInfo {
 	readonly manifest: IComputerUseRecordingManifest;
@@ -44,6 +46,7 @@ export class ComputerUseRecordingSource extends Disposable implements ISessionCo
 	private pendingSeekUs: number | undefined;
 	private thoughtIndex = 0;
 	private readonly firstSegmentStartMs: number;
+	private playbackStream: ComputerUseRecordingStream | undefined;
 	private timelineRanges: readonly IComputerUseRecordingTimelineRange[] | undefined;
 	private previewSegment: { readonly index: number; readonly value: IParsedComputerUseRecordingSegment } | undefined;
 
@@ -149,9 +152,7 @@ export class ComputerUseRecordingSource extends Disposable implements ISessionCo
 					...(sample.focus ? { focus: sample.focus } : {}),
 				});
 			}
-			const batch: IComputerUseVideoBatch = {
-				version: 1,
-				status: 'live',
+			const segmentStream: ComputerUseRecordingStream = {
 				streamId: `${this.info.manifest.recordingId}:${segment.header.streamId}`,
 				target: segment.header.target,
 				config: {
@@ -160,6 +161,14 @@ export class ComputerUseRecordingSource extends Disposable implements ISessionCo
 					codedHeight: segment.config.codedHeight,
 					description: encodeBase64(VSBuffer.wrap(segment.config.description)),
 				},
+			};
+			if (frames.length > 0 || !this.playbackStream) {
+				this.playbackStream = segmentStream;
+			}
+			const batch: IComputerUseVideoBatch = {
+				version: 1,
+				status: 'live',
+				...this.playbackStream,
 				frames,
 			};
 			if (this.sampleIndex >= segment.samples.length) {
@@ -282,6 +291,7 @@ export class ComputerUseRecordingSource extends Disposable implements ISessionCo
 		this.consumerHadCursor = false;
 		this.ended = false;
 		this.pendingSeekUs = clampedPositionMs * 1000;
+		this.playbackStream = undefined;
 		this.thoughtIndex = this.info.manifest.thoughts?.findIndex(thought => thought.timeMs >= this.firstSegmentStartMs + clampedPositionMs) ?? -1;
 		if (this.thoughtIndex < 0) {
 			this.thoughtIndex = this.info.manifest.thoughts?.length ?? 0;

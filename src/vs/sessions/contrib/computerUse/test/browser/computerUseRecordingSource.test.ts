@@ -79,9 +79,9 @@ suite('ComputerUseRecordingSource', () => {
 			kind: source.kind,
 			trimmed: source.info.manifest.trimmed,
 			first: firstBatch.frames?.map(frame => ({ timestamp: frame.timestamp, sequence: frame.sequence, data: frame.data })),
-			beforePause: beforePause.frames,
+			beforePause: { streamId: beforePause.streamId, frames: beforePause.frames },
 			resumed: resumed.frames?.map(frame => ({ timestamp: frame.timestamp, sequence: frame.sequence, data: frame.data })),
-			waiting: waiting.frames,
+			waiting: { streamId: waiting.streamId, frames: waiting.frames },
 			second: secondBatch.frames?.map(frame => ({ timestamp: frame.timestamp, sequence: frame.sequence, data: frame.data })),
 			ended: ended.status,
 			thought: source.thought?.get(),
@@ -89,12 +89,102 @@ suite('ComputerUseRecordingSource', () => {
 			kind: 'recording',
 			trimmed: true,
 			first: [{ timestamp: 0, sequence: 1, data: 'Cg==' }],
-			beforePause: [],
+			beforePause: { streamId: 'recording-1:stream-1', frames: [] },
 			resumed: [{ timestamp: 0, sequence: 2, data: 'Cg==' }],
-			waiting: [],
+			waiting: { streamId: 'recording-1:stream-1', frames: [] },
 			second: [{ timestamp: 400_000, sequence: 3, data: 'FA==' }],
 			ended: 'idle',
 			thought: undefined,
+		});
+	});
+
+	test('keeps playing the current remote frame while a future stream is separated by a gap', async () => {
+		const fileService = store.add(new FileService(new NullLogService()));
+		store.add(fileService.registerProvider(Schemas.inMemory, store.add(new InMemoryFileSystemProvider())));
+		const root = URI.from({ scheme: Schemas.inMemory, path: '/remote-gap-recording' });
+		await fileService.createFolder(root);
+		const segment = (streamId: string, timestampUs: number, byte: number) => serializeComputerUseRecordingSegment({
+			streamId,
+			target: { app: 'Notepad', windowId: 7, title: 'Document' },
+			config: {
+				codec: 'avc1.42C01F',
+				codedWidth: 1124,
+				codedHeight: 650,
+				description: Uint8Array.of(1, 2, 3, 4),
+			},
+			samples: [{
+				sequence: 1,
+				timestampUs,
+				durationUs: 33_333,
+				keyFrame: true,
+				frameCount: 1,
+				data: Uint8Array.of(byte),
+			}],
+		});
+		const first = segment('windows-stream-0', 42_008, 10);
+		const second = segment('windows-stream-2', 35_397, 20);
+		await fileService.writeFile(URI.joinPath(root, 'segment-000001.gop'), VSBuffer.wrap(first));
+		await fileService.writeFile(URI.joinPath(root, 'segment-000002.gop'), VSBuffer.wrap(second));
+		const manifestUri = URI.joinPath(root, 'manifest.json');
+		await fileService.writeFile(manifestUri, VSBuffer.fromString(JSON.stringify({
+			version: 1,
+			recordingId: 'remote-gap-recording',
+			createdAt: '2026-09-16T00:39:23.690Z',
+			finalized: true,
+			durationMs: 27_068,
+			sizeBytes: first.byteLength + second.byteLength,
+			trimmed: false,
+			segments: [
+				{ file: 'segment-000001.gop', startTimeMs: 0, durationMs: 34, sizeBytes: first.byteLength, sampleCount: 1 },
+				{ file: 'segment-000002.gop', startTimeMs: 14_534, durationMs: 34, sizeBytes: second.byteLength, sampleCount: 1 },
+			],
+			gaps: [
+				{ startTimeMs: 34, durationMs: 14_500, reason: 'invalidResource' },
+				{ startTimeMs: 14_568, durationMs: 12_500, reason: 'invalidResource' },
+			],
+		})));
+		const scheduler = new TestVideoScheduler();
+		const source = store.add(await ComputerUseRecordingSource.create(manifestUri, fileService, () => scheduler.now()));
+		const preview = await source.readRecordingPreview(0, CancellationToken.None);
+		const rendered: number[] = [];
+		const video = store.add(new ComputerUseVideo(source, new TestVideoDecoderFactory(), scheduler, {
+			render: frame => rendered.push(frame.timestamp),
+			clear: () => { },
+		}));
+		video.setVisible(true);
+		await scheduler.advance(0);
+		await scheduler.advance(1000);
+		const duringGap = {
+			status: video.state.get().status,
+			phase: video.state.get().phase,
+			message: video.state.get().message,
+			rendered: [...rendered],
+		};
+		await scheduler.advance(14_000);
+
+		assert.deepStrictEqual({
+			previewFrames: preview?.frames.map(frame => ({ timestamp: frame.timestamp, keyFrame: frame.keyFrame })),
+			duringGap,
+			afterTransition: {
+				status: video.state.get().status,
+				phase: video.state.get().phase,
+				message: video.state.get().message,
+				rendered,
+			},
+		}, {
+			previewFrames: [{ timestamp: 42_008, keyFrame: true }],
+			duringGap: {
+				status: 'live',
+				phase: undefined,
+				message: 'Playing Recording',
+				rendered: [0],
+			},
+			afterTransition: {
+				status: 'idle',
+				phase: undefined,
+				message: 'Recording ended. Showing the last frame.',
+				rendered: [0, 14_534_000],
+			},
 		});
 	});
 
