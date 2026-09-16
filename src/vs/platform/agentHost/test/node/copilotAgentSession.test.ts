@@ -122,7 +122,6 @@ class MockCopilotSession {
 	workingDirectoryOptionUpdateSuccess = true;
 	onWorkingDirectoryOptionUpdate: (() => void) | undefined;
 	readonly experimentalModeUpdates: boolean[] = [];
-	readonly availableToolsUpdates: Array<readonly string[]> = [];
 	experimentalModeUpdateSuccess = true;
 	sandboxConfigUpdateSuccess = true;
 	shellInitScriptUpdateSuccess = true;
@@ -152,8 +151,6 @@ class MockCopilotSession {
 	readonly mcpDisableCalls: Array<{ serverName: string }> = [];
 	readonly mcpStartServerCalls: Array<{ serverName: string }> = [];
 	readonly mcpStopServerCalls: Array<{ serverName: string }> = [];
-	readonly mcpListToolsCalls: Parameters<CopilotSession['rpc']['mcp']['listTools']>[0][] = [];
-	mcpListToolsResult: Awaited<ReturnType<CopilotSession['rpc']['mcp']['listTools']>> = { tools: [] };
 	readonly mcpResourceReadCalls: Array<{ serverName: string; uri: string }> = [];
 	readonly mcpResourceReadGates: Promise<void>[] = [];
 	readonly mcpResourceReadOperationLog: string[] = [];
@@ -486,9 +483,8 @@ class MockCopilotSession {
 					servers: this.mcpListResult.servers.map(server => server.name === params.serverName ? { ...server, status: 'pending' } : server),
 				};
 			},
-			listTools: async (params: { serverName: string }) => {
-				this.mcpListToolsCalls.push(params);
-				return this.mcpListToolsResult;
+			listTools: async (_params: { serverName: string }) => {
+				return { tools: [] };
 			},
 			disable: async (params: { serverName: string }) => {
 				this.mcpDisableCalls.push(params);
@@ -524,9 +520,6 @@ class MockCopilotSession {
 				}
 				if (params.isExperimentalMode !== undefined) {
 					this.experimentalModeUpdates.push(params.isExperimentalMode);
-				}
-				if (params.availableTools !== undefined) {
-					this.availableToolsUpdates.push([...params.availableTools]);
 				}
 				if (params.shell !== undefined) {
 					this.operationLog.push('options.update:shell');
@@ -864,7 +857,6 @@ async function createAgentSession(disposables: DisposableStore, options?: {
 	initializeEnablementSession?: (session: string) => Promise<void>;
 	beforeLaunch?: () => void;
 	realpath?: (path: string) => Promise<string>;
-	initialAvailableTools?: readonly string[];
 }): Promise<{
 	session: CopilotAgentSession;
 	runtime: TestCopilotSessionRuntime;
@@ -949,7 +941,7 @@ async function createAgentSession(disposables: DisposableStore, options?: {
 			if (options?.captureRuntime) {
 				options.captureRuntime.current = runtime;
 			}
-			return new CopilotSessionWrapper(mockSession as unknown as CopilotSession, options?.initialAvailableTools);
+			return new CopilotSessionWrapper(mockSession as unknown as CopilotSession);
 		}
 	};
 
@@ -10954,59 +10946,11 @@ Use the attached image as context.
 
 	suite('Computer Use tool scope', () => {
 
-		test('narrows the active turn after Computer Use and restores the original tools on idle', async () => {
-			const initialAvailableTools = ['mcp:*', 'builtin:ask_user', 'custom:view', 'custom:rename_chat'];
-			const { session, runtime, mockSession } = await createAgentSession(disposables, {
-				initialAvailableTools,
-				configureMockSession: mockSession => {
-					mockSession.mcpListToolsResult = {
-						tools: [
-							{ name: 'list_apps' },
-							{ name: 'start_app' },
-							{ name: 'stop_computer_use', ui: { visibility: ['app'] } },
-						],
-					};
-				},
-			});
-			session.resetTurnState('turn-computer-use');
-
-			const hookResult = await runtime.handlePostToolUse({
-				sessionId: 'test-session-1',
-				timestamp: new Date(0),
-				workingDirectory: '/tmp',
-				toolName: 'computer-use-list_apps',
-				toolArgs: { include_launchable: true },
-				toolResult: { textResultForLlm: '{}', resultType: 'success' },
-			});
-			mockSession.fire('session.idle', {} as SessionEventPayload<'session.idle'>['data']);
-			for (let attempt = 0; attempt < 10 && mockSession.availableToolsUpdates.length < 2; attempt++) {
-				await timeout(0);
-			}
-
-			assert.deepStrictEqual({
-				hookResult,
-				mcpListToolsCalls: mockSession.mcpListToolsCalls,
-				availableToolsUpdates: mockSession.availableToolsUpdates,
-			}, {
-				hookResult: undefined,
-				mcpListToolsCalls: [{ serverName: 'computer-use' }],
-				availableToolsUpdates: [
-					[
-						'mcp:computer-use-list_apps',
-						'mcp:computer-use-start_app',
-						'builtin:ask_user',
-						'custom:view',
-					],
-					initialAvailableTools,
-				],
-			});
-		});
-
 		test('does not narrow tools after a non-Computer Use tool', async () => {
-			const { session, runtime, mockSession } = await createAgentSession(disposables);
+			const { session, runtime } = await createAgentSession(disposables);
 			session.resetTurnState('turn-view');
 
-			const hookResult = await runtime.handlePostToolUse({
+			await runtime.handlePostToolUse({
 				sessionId: 'test-session-1',
 				timestamp: new Date(0),
 				workingDirectory: '/tmp',
@@ -11014,26 +10958,20 @@ Use the attached image as context.
 				toolArgs: { path: '/tmp/result.txt' },
 				toolResult: { textResultForLlm: '', resultType: 'success' },
 			});
-
-			assert.deepStrictEqual({
-				hookResult,
-				mcpListToolsCalls: mockSession.mcpListToolsCalls,
-				availableToolsUpdates: mockSession.availableToolsUpdates,
-			}, {
-				hookResult: undefined,
-				mcpListToolsCalls: [],
-				availableToolsUpdates: [],
+			const result = await runtime.handlePreToolUse({
+				sessionId: 'test-session-1',
+				timestamp: new Date(0),
+				workingDirectory: '/tmp',
+				toolName: 'powershell',
+				toolArgs: { command: 'echo allowed' },
 			});
+
+			assert.strictEqual(result, undefined);
 		});
 
-		test('restores every tool source when the session had no launch-time allowlist', async () => {
-			const { session, runtime, mockSession } = await createAgentSession(disposables, {
-				configureMockSession: mockSession => {
-					mockSession.mcpListToolsResult = { tools: [{ name: 'list_apps' }] };
-				},
-			});
+		test('denies unrelated tools until the Computer Use turn ends', async () => {
+			const { session, runtime, mockSession } = await createAgentSession(disposables);
 			session.resetTurnState('turn-computer-use');
-
 			await runtime.handlePostToolUse({
 				sessionId: 'test-session-1',
 				timestamp: new Date(0),
@@ -11042,12 +10980,52 @@ Use the attached image as context.
 				toolArgs: {},
 				toolResult: { textResultForLlm: '{}', resultType: 'success' },
 			});
-			mockSession.fire('session.idle', {} as SessionEventPayload<'session.idle'>['data']);
-			for (let attempt = 0; attempt < 10 && mockSession.availableToolsUpdates.length < 2; attempt++) {
-				await timeout(0);
-			}
 
-			assert.deepStrictEqual(mockSession.availableToolsUpdates.at(-1), ['builtin:*', 'custom:*', 'mcp:*']);
+			const restricted = await runtime.handlePreToolUse({
+				sessionId: 'test-session-1',
+				timestamp: new Date(0),
+				workingDirectory: '/tmp',
+				toolName: 'powershell',
+				toolArgs: { command: 'start notepad' },
+			});
+			const computerUse = await runtime.handlePreToolUse({
+				sessionId: 'test-session-1',
+				timestamp: new Date(0),
+				workingDirectory: '/tmp',
+				toolName: 'computer-use-start_app',
+				toolArgs: { app: 'Notepad' },
+			});
+			const askUser = await runtime.handlePreToolUse({
+				sessionId: 'test-session-1',
+				timestamp: new Date(0),
+				workingDirectory: '/tmp',
+				toolName: 'ask_user',
+				toolArgs: { question: 'Unlock the desktop' },
+			});
+			mockSession.fire('session.idle', {} as SessionEventPayload<'session.idle'>['data']);
+			const afterIdle = await runtime.handlePreToolUse({
+				sessionId: 'test-session-1',
+				timestamp: new Date(0),
+				workingDirectory: '/tmp',
+				toolName: 'powershell',
+				toolArgs: { command: 'echo restored' },
+			});
+
+			assert.deepStrictEqual({
+				restricted,
+				computerUse,
+				askUser,
+				afterIdle,
+			}, {
+				restricted: {
+					permissionDecision: 'deny',
+					permissionDecisionReason: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or agent-management tools.',
+					additionalContext: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or agent-management tools.',
+				},
+				computerUse: undefined,
+				askUser: undefined,
+				afterIdle: undefined,
+			});
 		});
 	});
 

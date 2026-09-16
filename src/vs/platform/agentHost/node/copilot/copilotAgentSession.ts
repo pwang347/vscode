@@ -116,40 +116,18 @@ const DEFAULT_CLIENT_TOOL_SDK_POLICY: IClientToolSdkPolicy = {};
 const CLIENT_TOOL_SDK_POLICIES: ReadonlyMap<string, IClientToolSdkPolicy> = new Map([
 	[SEMANTIC_SEARCH_TOOL_NAME, { overridesBuiltInTool: true, skipPermission: true }],
 ]);
-const ALL_COPILOT_TOOL_SOURCE_PATTERNS = ['builtin:*', 'custom:*', 'mcp:*'] as const;
 const COMPUTER_USE_COMPANION_TOOLS = [
-	{ name: CopilotToolName.AskUser, source: 'builtin' },
-	{ name: CopilotToolName.View, source: 'custom' },
+	CopilotToolName.AskUser,
+	CopilotToolName.View,
 ] as const;
-
-type CopilotToolSource = typeof COMPUTER_USE_COMPANION_TOOLS[number]['source'] | 'mcp';
-
-interface ICopilotToolFilterCandidate {
-	readonly name: string;
-	readonly source: CopilotToolSource;
-}
+const COMPUTER_USE_TOOL_SCOPE_RESTRICTION = 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or agent-management tools.';
 
 function isComputerUseToolName(toolName: string): boolean {
 	return toolName.toLowerCase().startsWith(`${COPILOT_COMPUTER_USE_SERVER_NAME}-`);
 }
 
-function toComputerUseToolName(toolName: string): string {
-	return isComputerUseToolName(toolName) ? toolName : `${COPILOT_COMPUTER_USE_SERVER_NAME}-${toolName}`;
-}
-
-function isAllowedByAvailableTools(candidate: ICopilotToolFilterCandidate, availableTools: readonly string[] | undefined): boolean {
-	if (!availableTools) {
-		return true;
-	}
-	return availableTools.some(pattern =>
-		pattern === candidate.name ||
-		pattern === `${candidate.source}:${candidate.name}` ||
-		pattern === `${candidate.source}:*`
-	);
-}
-
-function toSdkToolFilterPattern(candidate: ICopilotToolFilterCandidate): string {
-	return `${candidate.source}:${candidate.name}`;
+function isComputerUseCompanionToolName(toolName: string): boolean {
+	return COMPUTER_USE_COMPANION_TOOLS.some(name => name === toolName);
 }
 
 function readSubagentTaskModelSource(data: object): AgentSubagentTaskModelSource | undefined {
@@ -967,7 +945,6 @@ export class CopilotAgentSession extends Disposable {
 	private _dropLateRootTurnEvents = false;
 	private _agentMergeTurn = false;
 	private readonly _mcpServerNames: ReadonlySet<string>;
-	private readonly _computerUseToolScopeSequencer = new Sequencer();
 	private _computerUseToolScopeActive = false;
 	/** Monotonic 0-based ordinal assigned to each turn as it starts, for numeric `turnIndex` telemetry parity. */
 	private _nextTurnOrdinal = 0;
@@ -1915,6 +1892,7 @@ export class CopilotAgentSession extends Disposable {
 		}
 		this._currentTurn.clear();
 		this._agentMergeTurn = false;
+		this._computerUseToolScopeActive = false;
 		this._streamingToolCalls.clear();
 		this._streamingToolDisplaySchedulers.clearAndDisposeAll();
 		try {
@@ -2841,9 +2819,6 @@ export class CopilotAgentSession extends Disposable {
 
 	private async _send(prompt: string, attachments: readonly MessageAttachment[] | undefined, mode: CopilotSdkMode | undefined): Promise<void> {
 		this._logService.info(`[Copilot:${this.sessionId}] sendMessage called: "${prompt.substring(0, 100)}${prompt.length > 100 ? '...' : ''}" (${attachments?.length ?? 0} attachments)`);
-		if (this._computerUseToolScopeActive) {
-			await this._restoreComputerUseToolScope();
-		}
 
 		// Capture the turn's abort token before any dispatch await. Resolving a slash
 		// command awaits `rpc.commands.list`; an abort during that await drives a terminal
@@ -3010,9 +2985,6 @@ export class CopilotAgentSession extends Disposable {
 	}
 
 	async resume(turnId: string, mode?: CopilotSdkMode, senderClientId?: string, clientType = AgentHostClientType.Unknown, clientContext = createUnknownAgentHostClientTelemetryContext(clientType), agentMergeTurn = false): Promise<void> {
-		if (this._computerUseToolScopeActive) {
-			await this._restoreComputerUseToolScope();
-		}
 		this._resetAbortToken();
 		this.resetTurnState(turnId, senderClientId, clientType, clientContext);
 		this._agentMergeTurn = agentMergeTurn;
@@ -4869,9 +4841,11 @@ export class CopilotAgentSession extends Disposable {
 			const restriction = this._agentMergeTurn
 				? getAgentMergeGitHubToolRestriction(input.toolName, input.toolArgs)
 				?? (isCopilotMcpToolName(input.toolName, this._mcpServerNames) ? AGENT_MERGE_GITHUB_TOOL_RESTRICTION : undefined)
+				: this._computerUseToolScopeActive && !isComputerUseToolName(input.toolName) && !isComputerUseCompanionToolName(input.toolName)
+					? COMPUTER_USE_TOOL_SCOPE_RESTRICTION
 				: undefined;
 			if (restriction) {
-				this._logService.warn(`[Copilot:${this.sessionId}] Denying restricted Agent Merge tool: ${input.toolName}`);
+				this._logService.warn(`[Copilot:${this.sessionId}] Denying tool outside the active workflow scope: ${input.toolName}`);
 				return {
 					permissionDecision: 'deny',
 					permissionDecisionReason: restriction,
@@ -4889,54 +4863,11 @@ export class CopilotAgentSession extends Disposable {
 		}
 	}
 
-	/** Keeps a direct app workflow on Computer Use after its first successful tool call. */
-	private _activateComputerUseToolScope(invokedToolName: string): Promise<void> {
-		return this._computerUseToolScopeSequencer.queue(async () => {
-			if (this._computerUseToolScopeActive || !this._currentTurn.value) {
-				return;
-			}
-			const { tools } = await this._wrapper.session.rpc.mcp.listTools({ serverName: COPILOT_COMPUTER_USE_SERVER_NAME });
-			const candidates: ICopilotToolFilterCandidate[] = [
-				{ name: invokedToolName, source: 'mcp' },
-				...tools
-					.filter(tool => tool.ui?.visibility === undefined || tool.ui.visibility.includes('model'))
-					.map(tool => ({ name: toComputerUseToolName(tool.name), source: 'mcp' as const })),
-				...COMPUTER_USE_COMPANION_TOOLS,
-			];
-			const availableTools = [...new Set(candidates
-				.filter(candidate => candidate.name === invokedToolName || isAllowedByAvailableTools(candidate, this._wrapper.initialAvailableTools))
-				.map(toSdkToolFilterPattern))];
-			const result = await this._wrapper.session.rpc.options.update({ availableTools });
-			if (!result.success) {
-				throw new Error('Copilot SDK rejected the Computer Use tool scope');
-			}
-			this._computerUseToolScopeActive = true;
-			this._logService.info(`[Copilot:${this.sessionId}] Restricted the active turn to ${availableTools.length} Computer Use workflow tools`);
-		});
-	}
-
-	/** Restores the launch-time tool allowlist before the next root turn. */
-	private _restoreComputerUseToolScope(): Promise<void> {
-		return this._computerUseToolScopeSequencer.queue(async () => {
-			if (!this._computerUseToolScopeActive) {
-				return;
-			}
-			const availableTools = this._wrapper.initialAvailableTools
-				? [...this._wrapper.initialAvailableTools]
-				: [...ALL_COPILOT_TOOL_SOURCE_PATTERNS];
-			const result = await this._wrapper.session.rpc.options.update({ availableTools });
-			if (!result.success) {
-				throw new Error('Copilot SDK rejected restoring the session tool scope');
-			}
-			this._computerUseToolScopeActive = false;
-			this._logService.info(`[Copilot:${this.sessionId}] Restored the session tool scope after Computer Use`);
-		});
-	}
-
 	private async _handlePostToolUse(input: PostToolUseHookInput): Promise<void> {
 		try {
-			if (isComputerUseToolName(input.toolName)) {
-				await this._activateComputerUseToolScope(input.toolName);
+			if (isComputerUseToolName(input.toolName) && this._currentTurn.value) {
+				this._computerUseToolScopeActive = true;
+				this._logService.info(`[Copilot:${this.sessionId}] Activated the Computer Use workflow scope for the current turn`);
 			}
 			if (isEditTool(input.toolName, getToolCommand(input))) {
 				const filePaths = this._getEditFilePaths(input.toolArgs);
@@ -5624,13 +5555,6 @@ export class CopilotAgentSession extends Disposable {
 
 		this._register(wrapper.onIdle(async e => {
 			this._logService.info(`[Copilot:${sessionId}] Session idle`);
-			if (this._computerUseToolScopeActive) {
-				try {
-					await this._restoreComputerUseToolScope();
-				} catch (error) {
-					this._logService.error(error, `[Copilot:${sessionId}] Failed to restore the session tool scope after Computer Use`);
-				}
-			}
 			const abortingTurn = this._abortingTurn;
 			this._abortingTurn = undefined;
 			if (e.data.aborted) {
