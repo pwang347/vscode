@@ -10,6 +10,13 @@ sessions. The runtime owns the MCP transport, turn notifications, user-abort
 handling, and managed permission enforcement. Agent Host uses its existing
 elicitation UI, image results, and scoped customization enablement.
 
+Computer Use remains in the current user-facing agent so live viewing, Stop,
+consent, interruption, and recording stay aligned with the chat the user is
+supervising. Subagents may research, inspect files, or prepare an interaction
+plan, but must return that plan to the parent user-facing agent instead of
+invoking Computer Use. Agent Host does not synthesize or infer a dedicated
+Computer Use subagent.
+
 The macOS and Windows desktop Agent Hosts register this plugin automatically.
 Standalone hosts require an explicit host-side opt-in; connecting a viewer never
 enables desktop control. Ephemeral utility sessions keep Computer Use disabled.

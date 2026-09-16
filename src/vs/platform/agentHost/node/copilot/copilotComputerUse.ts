@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { Dirent } from 'fs';
-import type { CustomAgentConfig } from '@github/copilot-sdk';
 import * as fs from 'fs/promises';
 import { dirname, isAbsolute, join } from '../../../../base/common/path.js';
 import { isObject } from '../../../../base/common/types.js';
@@ -13,38 +12,8 @@ import { ILogService } from '../../../log/common/log.js';
 import { AgentHostLaunchKind } from '../../common/agentHostTelemetry.js';
 
 export const COPILOT_COMPUTER_USE_SERVER_NAME = 'computer-use';
-export const COPILOT_COMPUTER_USE_AGENT_NAME = 'computer-use';
 export const COPILOT_COMPUTER_USE_PLUGIN_PATH_ENV_VAR = 'VSCODE_COMPUTER_USE_PLUGIN_PATH';
 export const COPILOT_COMPUTER_USE_REMOTE_ENABLED_ENV_VAR = 'VSCODE_AGENT_HOST_COMPUTER_USE';
-
-const COPILOT_COMPUTER_USE_AGENT_TOOLS = [
-	'computer-use-get_window_state',
-	'computer-use-list_apps',
-	'computer-use-click',
-	'computer-use-set_value',
-	'computer-use-patch_text',
-	'computer-use-type_text',
-	'computer-use-press_key',
-	'computer-use-scroll',
-	'computer-use-perform_secondary_action',
-	'computer-use-drag',
-] as const;
-
-/** Returns the hard-scoped custom agent paired with the native Computer Use plugin. */
-export function createCopilotComputerUseAgent(platform: NodeJS.Platform): CustomAgentConfig {
-	return {
-		name: COPILOT_COMPUTER_USE_AGENT_NAME,
-		displayName: 'Computer Use',
-		description: 'Use for tasks that require observing or manipulating a desktop application UI when no dedicated app-specific MCP server can complete the task.',
-		tools: [
-			...COPILOT_COMPUTER_USE_AGENT_TOOLS,
-			...(platform === 'win32' ? ['computer-use-start_app'] : []),
-			'ask_user',
-		],
-		prompt: 'Complete the requested desktop application task using Computer Use tools. Stay in the direct app loop: discover only when necessary, perceive the exact window, perform the requested action, and verify the result. Do not delegate or switch to shell, terminal, browser, filesystem, session-management, skill, or agent-management tools.',
-		infer: true,
-	};
-}
 
 interface IComputerUsePluginOptions {
 	readonly cliPath: string;

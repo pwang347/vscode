@@ -39,7 +39,7 @@ import { CopilotSessionWrapper } from './copilotSessionWrapper.js';
 import { ShellManager, createShellTools, type IUnsandboxedCommandConfirmationRequest } from './copilotShellTools.js';
 import { isAutoModel, isGpt56Model } from './modelIdentifiers.js';
 import { EPHEMERAL_DISABLED_COPILOT_TOOLS } from './copilotToolDisplay.js';
-import { COPILOT_COMPUTER_USE_AGENT_NAME, COPILOT_COMPUTER_USE_SERVER_NAME, createCopilotComputerUseAgent } from './copilotComputerUse.js';
+import { COPILOT_COMPUTER_USE_SERVER_NAME } from './copilotComputerUse.js';
 import './prompts/allPrompts.js';
 import { agentHostPromptRegistry, type IAgentHostPromptContext } from './prompts/promptRegistry.js';
 import { applyConfiguredPromptOverrides } from './prompts/promptOverride.js';
@@ -243,8 +243,6 @@ interface ICopilotSessionLaunchBase {
 	 */
 	readonly additionalDirectories?: readonly URI[];
 	readonly resolvedAgentName: string | undefined;
-	/** Whether the Copilot client was started with the native Computer Use plugin. */
-	readonly computerUseEnabled?: boolean;
 	readonly snapshot: IActiveClientSnapshot;
 	/** Root-configured MCP servers disabled by the owning session's resolved customization state. */
 	readonly disabledRootMcpServers?: readonly string[];
@@ -884,10 +882,7 @@ export class CopilotSessionLauncher implements ICopilotSessionLauncher {
 		// An ephemeral session skips the explicit enumeration (and its file I/O). The SDK can
 		// still discover agents from `pluginDirectories`; suppressing that too would also drop
 		// skills and instructions, so it is left alone.
-		const discoveredCustomAgents = plan.isEphemeral ? [] : await toSdkSessionCustomAgents(plugins, plan.resolvedAgentName, this._fileService);
-		const customAgents = plan.computerUseEnabled && !discoveredCustomAgents.some(agent => agent.name === COPILOT_COMPUTER_USE_AGENT_NAME)
-			? [...discoveredCustomAgents, createCopilotComputerUseAgent(process.platform)]
-			: discoveredCustomAgents;
+		const customAgents = plan.isEphemeral ? [] : await toSdkSessionCustomAgents(plugins, plan.resolvedAgentName, this._fileService);
 		const skillDirectories = toSdkSkillDirectories(pluginsWithoutDirs.flatMap(p => p.skills));
 		const instructionDirectories = toSdkInstructionDirectories(plugins.flatMap(p => p.instructions));
 		const model = plan.kind === 'create' ? plan.model : plan.fallback.model;

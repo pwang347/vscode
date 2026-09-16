@@ -1474,15 +1474,13 @@ suite('CopilotSessionLauncher resume config', () => {
 		model: ModelSelection | undefined,
 		snapshot: CopilotSessionLaunchPlan['snapshot'] = { tools: [], plugins: [], mcpServers: {} },
 		createClientSdkTools: ICopilotSessionRuntime['createClientSdkTools'] = () => [],
-		computerUseEnabled = false,
-	): Promise<{ model?: string; reasoningEffort?: string; contextTier?: string; availableTools?: string[]; excludedTools?: string[]; modelCapabilities?: Record<string, unknown>; toolSearch?: { enabled: boolean }; enableExperimentalMode?: boolean; customAgents?: ResumeSessionConfig['customAgents'] }> {
+	): Promise<{ model?: string; reasoningEffort?: string; contextTier?: string; availableTools?: string[]; excludedTools?: string[]; modelCapabilities?: Record<string, unknown>; toolSearch?: { enabled: boolean }; enableExperimentalMode?: boolean }> {
 		const plan = {
 			kind: 'resume',
 			client: { createSession: async () => { throw new Error('unused'); }, resumeSession: async () => { throw new Error('unused'); } },
 			sessionId: 'sess-1',
 			workingDirectory: URI.file('/workspace'),
 			resolvedAgentName: undefined,
-			computerUseEnabled,
 			snapshot,
 			activeClientToolSet: new ActiveClientToolSet(),
 			shellManager: undefined,
@@ -1490,38 +1488,8 @@ suite('CopilotSessionLauncher resume config', () => {
 			fallback: { model },
 		};
 		const runtime = { createClientSdkTools, createServerSdkTools: () => [] };
-		return (launcher as unknown as { _buildSessionConfig(plan: unknown, runtime: unknown, onManagedSettingsResolved: () => void): Promise<{ model?: string; reasoningEffort?: string; contextTier?: string; availableTools?: string[]; excludedTools?: string[]; modelCapabilities?: Record<string, unknown>; toolSearch?: { enabled: boolean }; enableExperimentalMode?: boolean; customAgents?: ResumeSessionConfig['customAgents'] }> })._buildSessionConfig(plan, runtime, () => { });
+		return (launcher as unknown as { _buildSessionConfig(plan: unknown, runtime: unknown, onManagedSettingsResolved: () => void): Promise<{ model?: string; reasoningEffort?: string; contextTier?: string; availableTools?: string[]; excludedTools?: string[]; modelCapabilities?: Record<string, unknown>; toolSearch?: { enabled: boolean }; enableExperimentalMode?: boolean }> })._buildSessionConfig(plan, runtime, () => { });
 	}
-
-	test('adds the hard-scoped Computer Use agent only when the native plugin is enabled', async () => {
-		const launcher = createLauncher(disposables.add(new DisposableStore()), {});
-		const enabled = await buildResumeConfig(launcher, { id: 'gpt-5.6-sol' }, undefined, undefined, true);
-		const disabled = await buildResumeConfig(launcher, { id: 'gpt-5.6-sol' });
-
-		assert.deepStrictEqual({
-			enabled: enabled.customAgents?.map(agent => ({ name: agent.name, infer: agent.infer, tools: agent.tools })),
-			disabled: disabled.customAgents,
-		}, {
-			enabled: [{
-				name: 'computer-use',
-				infer: true,
-				tools: [
-					'computer-use-get_window_state',
-					'computer-use-list_apps',
-					'computer-use-click',
-					'computer-use-set_value',
-					'computer-use-patch_text',
-					'computer-use-type_text',
-					'computer-use-press_key',
-					'computer-use-scroll',
-					'computer-use-perform_secondary_action',
-					'computer-use-drag',
-					'ask_user',
-				],
-			}],
-			disabled: [],
-		});
-	});
 
 	test('enables experimental mode only with HydraFusion opt-in', async () => {
 		const store = disposables.add(new DisposableStore());

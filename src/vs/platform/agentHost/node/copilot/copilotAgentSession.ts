@@ -120,7 +120,7 @@ const COMPUTER_USE_COMPANION_TOOLS = [
 	CopilotToolName.AskUser,
 	CopilotToolName.View,
 ] as const;
-const COMPUTER_USE_TOOL_SCOPE_RESTRICTION = 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool, or delegate once to the `computer-use` agent if it is available; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or unrelated agent-management tools.';
+const COMPUTER_USE_TOOL_SCOPE_RESTRICTION = 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not delegate Computer Use to a subagent or switch to shell, browser, session, skill, or agent-management tools.';
 
 function isComputerUseToolName(toolName: string): boolean {
 	return toolName.toLowerCase().startsWith(`${COPILOT_COMPUTER_USE_SERVER_NAME}-`);
@@ -128,13 +128,6 @@ function isComputerUseToolName(toolName: string): boolean {
 
 function isComputerUseCompanionToolName(toolName: string): boolean {
 	return COMPUTER_USE_COMPANION_TOOLS.some(name => name === toolName);
-}
-
-function isComputerUseAgentDelegation(toolName: string, toolArgs: unknown): boolean {
-	if (toolName !== CopilotToolName.Task || !isObject(toolArgs)) {
-		return false;
-	}
-	return (toolArgs as Record<string, unknown>)['agent_type'] === 'computer-use';
 }
 
 function readSubagentTaskModelSource(data: object): AgentSubagentTaskModelSource | undefined {
@@ -4851,7 +4844,6 @@ export class CopilotAgentSession extends Disposable {
 				: this._computerUseToolScopeActive
 					&& !isComputerUseToolName(input.toolName)
 					&& !isComputerUseCompanionToolName(input.toolName)
-					&& !isComputerUseAgentDelegation(input.toolName, input.toolArgs)
 					? COMPUTER_USE_TOOL_SCOPE_RESTRICTION
 				: undefined;
 			if (restriction) {

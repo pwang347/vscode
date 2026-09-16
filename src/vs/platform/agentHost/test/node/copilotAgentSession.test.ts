@@ -10969,7 +10969,7 @@ Use the attached image as context.
 			assert.strictEqual(result, undefined);
 		});
 
-		test('denies unrelated tools until the Computer Use turn ends', async () => {
+		test('denies subagents and unrelated tools until the Computer Use turn ends', async () => {
 			const { session, runtime, mockSession } = await createAgentSession(disposables);
 			session.resetTurnState('turn-computer-use');
 			await runtime.handlePostToolUse({
@@ -11035,16 +11035,20 @@ Use the attached image as context.
 			}, {
 				restricted: {
 					permissionDecision: 'deny',
-					permissionDecisionReason: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool, or delegate once to the `computer-use` agent if it is available; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or unrelated agent-management tools.',
-					additionalContext: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool, or delegate once to the `computer-use` agent if it is available; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or unrelated agent-management tools.',
+					permissionDecisionReason: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not delegate Computer Use to a subagent or switch to shell, browser, session, skill, or agent-management tools.',
+					additionalContext: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not delegate Computer Use to a subagent or switch to shell, browser, session, skill, or agent-management tools.',
 				},
 				computerUse: undefined,
 				askUser: undefined,
-				computerUseAgent: undefined,
+				computerUseAgent: {
+					permissionDecision: 'deny',
+					permissionDecisionReason: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not delegate Computer Use to a subagent or switch to shell, browser, session, skill, or agent-management tools.',
+					additionalContext: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not delegate Computer Use to a subagent or switch to shell, browser, session, skill, or agent-management tools.',
+				},
 				unrelatedAgent: {
 					permissionDecision: 'deny',
-					permissionDecisionReason: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool, or delegate once to the `computer-use` agent if it is available; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or unrelated agent-management tools.',
-					additionalContext: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool, or delegate once to the `computer-use` agent if it is available; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not switch to shell, browser, session, skill, or unrelated agent-management tools.',
+					permissionDecisionReason: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not delegate Computer Use to a subagent or switch to shell, browser, session, skill, or agent-management tools.',
+					additionalContext: 'The current turn is already using Computer Use for a direct app task. Continue the original request with a `computer-use-*` tool; after `list_apps`, use `computer-use-start_app` for a new window or `computer-use-get_window_state` for an existing window. Do not delegate Computer Use to a subagent or switch to shell, browser, session, skill, or agent-management tools.',
 				},
 				afterIdle: undefined,
 			});
