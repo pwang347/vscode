@@ -1,12 +1,12 @@
 {
-  "id": "managed-plugin-enforcement-2026-09-29T22-48-58-495Z",
+  "id": "managed-plugin-enforcement-2026-09-29T22-59-33-778Z",
   "scenarioId": "managed-plugin-enforcement",
   "title": "Managed plugins install automatically and remain locked",
   "source": "https://github.com/microsoft/vscode-internalbacklog/issues/8906",
   "workspacePath": "/var/folders/8b/phxvjq5j67b9mgn31rp0k25h0000gn/T/vscode-managed-plugin-enforcement/workspace",
-  "startedAt": "2026-09-29T22:48:58.495Z",
-  "videoStartedAt": "2026-09-29T22:49:00.519Z",
-  "completedAt": "2026-09-29T22:49:19.237Z",
+  "startedAt": "2026-09-29T22:59:33.778Z",
+  "videoStartedAt": "2026-09-29T22:59:40.703Z",
+  "completedAt": "2026-09-29T22:59:56.523Z",
   "outcome": "passed",
   "environment": {
     "platform": "darwin",
@@ -17,11 +17,12 @@
   },
   "artifacts": {
     "videos": [
+      "videos/annotated.mp4",
       "videos/recording-1.webm"
     ],
     "logs": [
       "logs/agenthost.log",
-      "logs/ahp/ahp-02f67cdff4e3f92dbcbbf4dc6080381ed9820bd1-2026-09-29T22-49-04-781Z-50d6d797-e52d-42d2-9d26-39a365e20d25.jsonl",
+      "logs/ahp/ahp-69e0fa7ec762efeac12faee648ea624755d2aebe-2026-09-29T22-59-46-877Z-0152feed-b2bb-495d-9167-0fa09d6a19af.jsonl",
       "logs/main.log",
       "logs/mcpGateway.log",
       "logs/playwright-screenshot-1.png",
@@ -34,10 +35,9 @@
       "logs/window1/exthost/vscode.git/Git.log",
       "logs/window1/exthost/vscode.github/GitHub.log",
       "logs/window1/exthost/vscode.github-authentication/GitHub Authentication.log",
-      "logs/window1/exthost/vscode.json-language-features/JSON Language Server.log",
       "logs/window1/fileWatcher.log",
       "logs/window1/network.log",
-      "logs/window1/output_20260929T154904/agentSessionsOutput.log",
+      "logs/window1/output_20260929T155946/agentSessionsOutput.log",
       "logs/window1/renderer.log",
       "logs/window1/views.log"
     ],
@@ -50,35 +50,35 @@
       "captures": [
         {
           "status": "started",
-          "timestamp": "2026-09-29T22:49:06.587Z",
+          "timestamp": "2026-09-29T22:59:48.581Z",
           "screenshot": "01-MP-01-started.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
         },
         {
           "status": "passed",
-          "timestamp": "2026-09-29T22:49:12.268Z",
+          "timestamp": "2026-09-29T22:59:49.418Z",
           "screenshot": "01-MP-01-passed.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
-          "details": "The local evidence marketplace is trusted and the Plugins section is visible."
+          "details": "The isolated plugin inventory does not contain managed-hook-plugin@managed-hook-marketplace."
         }
       ]
     },
     {
       "id": "MP-02",
-      "title": "Wait for the required plugin to install",
+      "title": "Publish the marketplace and install the required plugin",
       "captures": [
         {
           "status": "started",
-          "timestamp": "2026-09-29T22:49:14.373Z",
+          "timestamp": "2026-09-29T22:59:51.528Z",
           "screenshot": "02-MP-02-started.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
         },
         {
           "status": "passed",
-          "timestamp": "2026-09-29T22:49:14.721Z",
+          "timestamp": "2026-09-29T22:59:51.950Z",
           "screenshot": "02-MP-02-passed.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
-          "details": "Policy installed managed-hook-plugin@managed-hook-marketplace from the local marketplace."
+          "details": "managed-hook-plugin@managed-hook-marketplace appeared after the marketplace became available."
         }
       ]
     },
@@ -88,16 +88,16 @@
       "captures": [
         {
           "status": "started",
-          "timestamp": "2026-09-29T22:49:16.810Z",
+          "timestamp": "2026-09-29T22:59:54.049Z",
           "screenshot": "03-MP-03-started.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
         },
         {
           "status": "passed",
-          "timestamp": "2026-09-29T22:49:17.149Z",
+          "timestamp": "2026-09-29T22:59:54.427Z",
           "screenshot": "03-MP-03-passed.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
-          "details": "The required plugin is enabled and its toggle is disabled by organization policy."
+          "details": "After an attempted toggle, the required plugin remains enabled and locked by organization policy."
         }
       ]
     }
