@@ -1,0 +1,104 @@
+{
+  "id": "managed-plugin-enforcement-2026-09-29T22-27-23-140Z",
+  "scenarioId": "managed-plugin-enforcement",
+  "title": "Managed plugins install automatically and remain locked",
+  "source": "https://github.com/microsoft/vscode-internalbacklog/issues/8906",
+  "workspacePath": "/var/folders/8b/phxvjq5j67b9mgn31rp0k25h0000gn/T/vscode-managed-plugin-enforcement/workspace",
+  "startedAt": "2026-09-29T22:27:23.140Z",
+  "videoStartedAt": "2026-09-29T22:27:24.848Z",
+  "completedAt": "2026-09-29T22:27:40.493Z",
+  "outcome": "passed",
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "nodeVersion": "v24.18.0",
+    "vscodeVersion": "1.140.0",
+    "quality": "Dev"
+  },
+  "artifacts": {
+    "videos": [
+      "videos/recording-1.webm"
+    ],
+    "logs": [
+      "logs/agenthost.log",
+      "logs/ahp/ahp-e7f967ef61e0d2d3496c082944492ce5a77974d1-2026-09-29T22-27-29-396Z-4a878b38-0533-4900-a218-7d3a8539e1a6.jsonl",
+      "logs/main.log",
+      "logs/mcpGateway.log",
+      "logs/playwright-screenshot-1.png",
+      "logs/playwright-trace-1.zip",
+      "logs/remoteTunnelService.log",
+      "logs/sharedprocess.log",
+      "logs/smoke-test-runner.log",
+      "logs/terminal.log",
+      "logs/window1/exthost/exthost.log",
+      "logs/window1/exthost/vscode.git/Git.log",
+      "logs/window1/exthost/vscode.github/GitHub.log",
+      "logs/window1/exthost/vscode.github-authentication/GitHub Authentication.log",
+      "logs/window1/fileWatcher.log",
+      "logs/window1/network.log",
+      "logs/window1/output_20260929T152729/agentSessionsOutput.log",
+      "logs/window1/renderer.log",
+      "logs/window1/views.log"
+    ],
+    "report": "report.html"
+  },
+  "steps": [
+    {
+      "id": "MP-01",
+      "title": "Open Agent Customizations",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-29T22:27:31.689Z",
+          "screenshot": "01-MP-01-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-29T22:27:33.273Z",
+          "screenshot": "01-MP-01-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "The local evidence marketplace is trusted and the Plugins section is visible."
+        }
+      ]
+    },
+    {
+      "id": "MP-02",
+      "title": "Wait for the required plugin to install",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-29T22:27:35.414Z",
+          "screenshot": "02-MP-02-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-29T22:27:35.880Z",
+          "screenshot": "02-MP-02-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "Policy installed managed-hook-plugin@managed-hook-marketplace from the local marketplace."
+        }
+      ]
+    },
+    {
+      "id": "MP-03",
+      "title": "Verify managed enablement cannot be changed",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-29T22:27:38.015Z",
+          "screenshot": "03-MP-03-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-29T22:27:38.403Z",
+          "screenshot": "03-MP-03-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "The required plugin is enabled and its toggle is disabled by organization policy."
+        }
+      ]
+    }
+  ]
+}
