@@ -4,7 +4,7 @@
 
 Source: `microsoft/vscode-internalbacklog#8906`
 
-Dev build `1.140.0` on macOS arm64:
+Dev build `1.141.0` on macOS arm64:
 
 1. Open Agent Customizations and trust the disposable local marketplace.
 2. Verify policy automatically installs `managed-hook-plugin@managed-hook-marketplace`.
