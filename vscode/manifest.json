@@ -1,12 +1,12 @@
 {
-  "id": "managed-plugin-enforcement-2026-09-30T16-58-58-846Z",
+  "id": "managed-plugin-enforcement-2026-09-30T17-04-10-925Z",
   "scenarioId": "managed-plugin-enforcement",
   "title": "Managed and repository plugins install automatically",
   "source": "https://github.com/microsoft/vscode-internalbacklog/issues/8906",
   "workspacePath": "/var/folders/8b/phxvjq5j67b9mgn31rp0k25h0000gn/T/vscode-managed-plugin-enforcement/workspace",
-  "startedAt": "2026-09-30T16:58:58.846Z",
-  "videoStartedAt": "2026-09-30T16:59:00.092Z",
-  "completedAt": "2026-09-30T16:59:14.712Z",
+  "startedAt": "2026-09-30T17:04:10.925Z",
+  "videoStartedAt": "2026-09-30T17:04:12.198Z",
+  "completedAt": "2026-09-30T17:04:28.706Z",
   "outcome": "passed",
   "environment": {
     "platform": "darwin",
@@ -22,7 +22,7 @@
     ],
     "logs": [
       "logs/agenthost.log",
-      "logs/ahp/ahp-f026097218d3462ebaaea96a48a4462df61ef7ed-2026-09-30T16-59-03-279Z-869ddf7e-8c9f-4d96-baa6-66cc4501e19d.jsonl",
+      "logs/ahp/ahp-3b9102026a5be26c7117821a446983a000c00622-2026-09-30T17-04-16-793Z-c781c2c9-7926-4f52-b244-86e28060f97f.jsonl",
       "logs/main.log",
       "logs/mcpGateway.log",
       "logs/playwright-screenshot-1.png",
@@ -35,9 +35,10 @@
       "logs/window1/exthost/vscode.git/Git.log",
       "logs/window1/exthost/vscode.github/GitHub.log",
       "logs/window1/exthost/vscode.github-authentication/GitHub Authentication.log",
+      "logs/window1/exthost/vscode.json-language-features/JSON Language Server.log",
       "logs/window1/fileWatcher.log",
       "logs/window1/network.log",
-      "logs/window1/output_20260930T095903/agentSessionsOutput.log",
+      "logs/window1/output_20260930T100416/agentSessionsOutput.log",
       "logs/window1/renderer.log",
       "logs/window1/views.log"
     ],
@@ -50,13 +51,13 @@
       "captures": [
         {
           "status": "started",
-          "timestamp": "2026-09-30T16:59:05.482Z",
+          "timestamp": "2026-09-30T17:04:19.101Z",
           "screenshot": "01-MP-01-started.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
         },
         {
           "status": "passed",
-          "timestamp": "2026-09-30T16:59:07.406Z",
+          "timestamp": "2026-09-30T17:04:20.646Z",
           "screenshot": "01-MP-01-passed.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
           "details": "managed-hook-plugin@managed-hook-marketplace installed without confirmation; repository-demo@repository-marketplace is still absent."
@@ -69,13 +70,13 @@
       "captures": [
         {
           "status": "started",
-          "timestamp": "2026-09-30T16:59:09.506Z",
+          "timestamp": "2026-09-30T17:04:22.783Z",
           "screenshot": "02-MP-02-started.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
         },
         {
           "status": "passed",
-          "timestamp": "2026-09-30T16:59:10.153Z",
+          "timestamp": "2026-09-30T17:04:24.052Z",
           "screenshot": "02-MP-02-passed.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
           "details": "repository-demo@repository-marketplace installed from trusted repository settings without a confirmation dialog."
@@ -88,13 +89,13 @@
       "captures": [
         {
           "status": "started",
-          "timestamp": "2026-09-30T16:59:12.249Z",
+          "timestamp": "2026-09-30T17:04:26.196Z",
           "screenshot": "03-MP-03-started.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
         },
         {
           "status": "passed",
-          "timestamp": "2026-09-30T16:59:12.616Z",
+          "timestamp": "2026-09-30T17:04:26.606Z",
           "screenshot": "03-MP-03-passed.png",
           "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
           "details": "The managed plugin remains locked after an attempted toggle, and the repository plugin is active for this workspace."
