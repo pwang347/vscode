@@ -1,0 +1,86 @@
+{
+  "id": "managed-plugin-enforcement-only-2026-09-30T17-22-17-134Z",
+  "scenarioId": "managed-plugin-enforcement-only",
+  "title": "Managed plugins install silently and remain locked",
+  "source": "https://github.com/microsoft/vscode-internalbacklog/issues/8906",
+  "workspacePath": "/var/folders/8b/phxvjq5j67b9mgn31rp0k25h0000gn/T/vscode-managed-plugin-enforcement-only/workspace",
+  "startedAt": "2026-09-30T17:22:17.134Z",
+  "videoStartedAt": "2026-09-30T17:22:18.930Z",
+  "completedAt": "2026-09-30T17:22:31.159Z",
+  "outcome": "passed",
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "nodeVersion": "v24.18.0",
+    "vscodeVersion": "1.141.0",
+    "quality": "Dev"
+  },
+  "artifacts": {
+    "videos": [
+      "videos/annotated.mp4",
+      "videos/recording-1.webm"
+    ],
+    "logs": [
+      "logs/agenthost.log",
+      "logs/ahp/ahp-33761b9fc8c61f142b3809770de00682928c449d-2026-09-30T17-22-22-395Z-ef84ef61-b376-43e1-a0b8-44e03499cd1f.jsonl",
+      "logs/main.log",
+      "logs/mcpGateway.log",
+      "logs/playwright-screenshot-1.png",
+      "logs/playwright-trace-1.zip",
+      "logs/remoteTunnelService.log",
+      "logs/sharedprocess.log",
+      "logs/smoke-test-runner.log",
+      "logs/terminal.log",
+      "logs/window1/exthost/exthost.log",
+      "logs/window1/exthost/vscode.git/Git.log",
+      "logs/window1/exthost/vscode.github/GitHub.log",
+      "logs/window1/exthost/vscode.github-authentication/GitHub Authentication.log",
+      "logs/window1/fileWatcher.log",
+      "logs/window1/network.log",
+      "logs/window1/output_20260930T102222/agentSessionsOutput.log",
+      "logs/window1/renderer.log",
+      "logs/window1/views.log"
+    ],
+    "report": "report.html"
+  },
+  "steps": [
+    {
+      "id": "MP-01",
+      "title": "Install the managed plugin without confirmation",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-30T17:22:25.092Z",
+          "screenshot": "01-MP-01-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-30T17:22:26.578Z",
+          "screenshot": "01-MP-01-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "managed-hook-plugin@managed-hook-marketplace installed into an initially empty inventory without confirmation."
+        }
+      ]
+    },
+    {
+      "id": "MP-02",
+      "title": "Keep managed enablement locked",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-30T17:22:28.681Z",
+          "screenshot": "02-MP-02-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-30T17:22:29.055Z",
+          "screenshot": "02-MP-02-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "The managed plugin remains enabled and locked after an attempted toggle."
+        }
+      ]
+    }
+  ]
+}
