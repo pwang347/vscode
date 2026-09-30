@@ -1,0 +1,105 @@
+{
+  "id": "repository-plugin-activation-2026-09-30T17-19-01-926Z",
+  "scenarioId": "repository-plugin-activation",
+  "title": "Repository plugins install without confirmation",
+  "source": "https://github.com/microsoft/vscode/issues/336858",
+  "workspacePath": "/var/folders/8b/phxvjq5j67b9mgn31rp0k25h0000gn/T/vscode-repository-plugin-activation/workspace",
+  "startedAt": "2026-09-30T17:19:01.926Z",
+  "videoStartedAt": "2026-09-30T17:19:03.424Z",
+  "completedAt": "2026-09-30T17:19:17.274Z",
+  "outcome": "passed",
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "nodeVersion": "v24.18.0",
+    "vscodeVersion": "1.141.0",
+    "quality": "Dev"
+  },
+  "artifacts": {
+    "videos": [
+      "videos/annotated.mp4",
+      "videos/recording-1.webm"
+    ],
+    "logs": [
+      "logs/agenthost.log",
+      "logs/ahp/ahp-a32505e295c7e79e656c2b2ce2d49475201c65b3-2026-09-30T17-19-06-519Z-1c7065d5-2402-4da8-b5fa-e9aa7f3a7211.jsonl",
+      "logs/main.log",
+      "logs/mcpGateway.log",
+      "logs/playwright-screenshot-1.png",
+      "logs/playwright-trace-1.zip",
+      "logs/remoteTunnelService.log",
+      "logs/sharedprocess.log",
+      "logs/smoke-test-runner.log",
+      "logs/terminal.log",
+      "logs/window1/exthost/exthost.log",
+      "logs/window1/exthost/vscode.git/Git.log",
+      "logs/window1/exthost/vscode.github/GitHub.log",
+      "logs/window1/exthost/vscode.github-authentication/GitHub Authentication.log",
+      "logs/window1/fileWatcher.log",
+      "logs/window1/network.log",
+      "logs/window1/output_20260930T101906/agentSessionsOutput.log",
+      "logs/window1/renderer.log",
+      "logs/window1/views.log"
+    ],
+    "report": "report.html"
+  },
+  "steps": [
+    {
+      "id": "RP-01",
+      "title": "Start with an empty repository plugin inventory",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-30T17:19:08.612Z",
+          "screenshot": "01-RP-01-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-30T17:19:09.510Z",
+          "screenshot": "01-RP-01-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "repository-demo@repository-marketplace is absent from the isolated plugin inventory."
+        }
+      ]
+    },
+    {
+      "id": "RP-02",
+      "title": "Publish repository settings and install automatically",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-30T17:19:11.598Z",
+          "screenshot": "02-RP-02-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-30T17:19:12.747Z",
+          "screenshot": "02-RP-02-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "repository-demo@repository-marketplace installed without a confirmation dialog."
+        }
+      ]
+    },
+    {
+      "id": "RP-03",
+      "title": "Verify workspace activation and update configuration",
+      "captures": [
+        {
+          "status": "started",
+          "timestamp": "2026-09-30T17:19:14.842Z",
+          "screenshot": "03-RP-03-started.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html"
+        },
+        {
+          "status": "passed",
+          "timestamp": "2026-09-30T17:19:15.183Z",
+          "screenshot": "03-RP-03-passed.png",
+          "windowUrl": "vscode-file://vscode-app/Users/paulwang/Desktop/shared/code/vscode2/out/vs/code/electron-browser/workbench/workbench-dev.html",
+          "details": "The plugin is workspace-active and its repository marketplace participates in automatic updates."
+        }
+      ]
+    }
+  ]
+}

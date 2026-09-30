@@ -23,6 +23,22 @@ Artifacts:
 
 The captioned MP4 was rendered with Homebrew `ffmpeg-full`.
 
+## Repository plugin activation
+
+Source: `microsoft/vscode#336858`
+
+The scenario starts with an isolated empty plugin inventory, publishes trusted `.github/copilot/settings.json` entries with `enabledPlugins: true` and `autoUpdate: true`, and verifies the plugin installs without a trust dialog and becomes workspace-active.
+
+Artifacts:
+
+- `repository/report.html`
+- `repository/manifest.json`
+- `repository/videos/annotated.mp4`
+- `repository/videos/recording-1.webm`
+- `repository/01-RP-01-passed.png`
+- `repository/02-RP-02-passed.png`
+- `repository/03-RP-03-passed.png`
+
 ## Copilot CLI
 
 The managed-plugin E2E test verifies that an unavailable required plugin leaves a normal prompt in the composer, keeps the agent idle, and shows the recovery command.
