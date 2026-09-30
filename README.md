@@ -6,10 +6,10 @@ Source: `microsoft/vscode-internalbacklog#8906`
 
 Dev build `1.141.0` on macOS arm64:
 
-1. Open Agent Customizations and trust the disposable local marketplace.
-2. Start with an isolated empty plugin inventory, then publish the disposable marketplace.
-3. Verify policy automatically installs `managed-hook-plugin@managed-hook-marketplace`.
-4. Attempt the organization-managed toggle and verify the plugin remains enabled and locked.
+1. Start with an isolated plugin inventory and verify policy installs `managed-hook-plugin@managed-hook-marketplace` without confirmation.
+2. Publish trusted repository settings for `repository-demo@repository-marketplace`.
+3. Verify the repository plugin installs and becomes workspace-active without a marketplace confirmation.
+4. Attempt the organization-managed toggle and verify the managed plugin remains enabled and locked.
 
 Artifacts:
 
